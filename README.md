@@ -32,6 +32,8 @@ python generate_report.py \\
   --prompt "Relatório de obra com nome, localidade, status PEP e registros fotográficos."
 ```
 
+> Dica: use `--log-file relatorio.log` para salvar os logs em arquivo e acompanhar o contador no final.
+
 4. Para converter o Markdown gerado em DOCX (requer `pandoc`):
 
 ```bash

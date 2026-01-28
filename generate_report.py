@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import argparse
 import json
+import logging
 import os
 import re
 import shutil
@@ -10,6 +11,39 @@ from pathlib import Path
 
 import openai
 import pystache
+
+
+class LogCounter(logging.Handler):
+    def __init__(self) -> None:
+        super().__init__()
+        self.counts = {"debug": 0, "info": 0, "warning": 0, "error": 0, "critical": 0}
+
+    def emit(self, record: logging.LogRecord) -> None:
+        level = record.levelname.lower()
+        if level in self.counts:
+            self.counts[level] += 1
+
+
+def _configure_logging(log_level: str, log_file: str | None) -> LogCounter:
+    handlers: list[logging.Handler] = []
+    handler = LogCounter()
+    handlers.append(handler)
+
+    console = logging.StreamHandler()
+    console.setLevel(log_level)
+    handlers.append(console)
+
+    if log_file:
+        file_handler = logging.FileHandler(log_file, encoding="utf-8")
+        file_handler.setLevel(log_level)
+        handlers.append(file_handler)
+
+    logging.basicConfig(
+        level=log_level,
+        format="%(asctime)s %(levelname)s %(message)s",
+        handlers=handlers,
+    )
+    return handler
 
 
 def _strip_code_fences(text: str) -> str:
@@ -27,6 +61,7 @@ def _extract_json(text: str) -> dict:
     brace_end = cleaned.rfind("}")
     if brace_start != -1 and brace_end != -1 and brace_end > brace_start:
         return json.loads(cleaned[brace_start : brace_end + 1])
+    logging.error("Resposta da IA não contém JSON válido.")
     raise ValueError("Resposta da IA não contém JSON válido.")
 
 
@@ -37,6 +72,7 @@ def _load_prompt(args: argparse.Namespace) -> str:
         return Path(args.prompt_file).read_text(encoding="utf-8")
     if not sys.stdin.isatty():
         return sys.stdin.read()
+    logging.error("Nenhum prompt fornecido.")
     raise ValueError("Informe --prompt, --prompt-file ou envie texto via stdin.")
 
 
@@ -59,6 +95,7 @@ def _call_openai(prompt: str, model: str) -> dict:
         "Cada item em itens deve ter: foto e descricao. "
         "Se algum dado não existir, use string vazia ou listas vazias."
     )
+    logging.info("Chamando OpenAI com modelo %s.", model)
     response = client.chat.completions.create(
         model=model,
         messages=[
@@ -68,6 +105,7 @@ def _call_openai(prompt: str, model: str) -> dict:
         temperature=0.2,
     )
     content = response.choices[0].message.content
+    logging.debug("Resposta bruta da IA recebida.")
     return _extract_json(content)
 
 
@@ -84,6 +122,7 @@ def _write_output(path: Path, content: str) -> None:
 
 def _convert_to_docx(markdown_path: Path, docx_path: Path) -> None:
     if not shutil.which("pandoc"):
+        logging.error("pandoc não encontrado no PATH.")
         raise RuntimeError("pandoc não encontrado no PATH.")
     subprocess.run(
         ["pandoc", str(markdown_path), "-o", str(docx_path)],
@@ -130,33 +169,62 @@ def build_parser() -> argparse.ArgumentParser:
         "--output-json",
         help="Salva o JSON gerado pela IA.",
     )
+    parser.add_argument(
+        "--log-level",
+        default="INFO",
+        choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
+        help="Nível de log (default: INFO).",
+    )
+    parser.add_argument(
+        "--log-file",
+        help="Salva logs em arquivo para auditoria.",
+    )
     return parser
 
 
 def main() -> int:
     parser = build_parser()
     args = parser.parse_args()
+    log_counter = _configure_logging(args.log_level, args.log_file)
 
-    if args.data_json:
-        data = _load_data_json(args.data_json)
-    else:
-        prompt = _load_prompt(args)
-        if not os.getenv("OPENAI_API_KEY"):
-            raise RuntimeError("Defina a variável OPENAI_API_KEY.")
-        data = _call_openai(prompt, args.model)
+    try:
+        if args.data_json:
+            data = _load_data_json(args.data_json)
+            logging.info("Dados carregados do JSON %s.", args.data_json)
+        else:
+            prompt = _load_prompt(args)
+            if not os.getenv("OPENAI_API_KEY"):
+                logging.error("OPENAI_API_KEY não definida.")
+                raise RuntimeError("Defina a variável OPENAI_API_KEY.")
+            data = _call_openai(prompt, args.model)
 
-    template_path = Path(args.template)
-    output_md = Path(args.output_md)
-    output_docx = Path(args.output_docx)
+        template_path = Path(args.template)
+        output_md = Path(args.output_md)
+        output_docx = Path(args.output_docx)
 
-    rendered = _render_template(template_path, data)
-    _write_output(output_md, rendered)
+        rendered = _render_template(template_path, data)
+        _write_output(output_md, rendered)
+        logging.info("Markdown gerado em %s.", output_md)
 
-    if args.output_json:
-        _write_output(Path(args.output_json), json.dumps(data, ensure_ascii=False, indent=2))
+        if args.output_json:
+            _write_output(
+                Path(args.output_json),
+                json.dumps(data, ensure_ascii=False, indent=2),
+            )
+            logging.info("JSON salvo em %s.", args.output_json)
 
-    if args.convert_docx:
-        _convert_to_docx(output_md, output_docx)
+        if args.convert_docx:
+            _convert_to_docx(output_md, output_docx)
+            logging.info("DOCX gerado em %s.", output_docx)
+    finally:
+        logging.info(
+            "Resumo de logs: debug=%d info=%d warning=%d error=%d critical=%d",
+            log_counter.counts["debug"],
+            log_counter.counts["info"],
+            log_counter.counts["warning"],
+            log_counter.counts["error"],
+            log_counter.counts["critical"],
+        )
 
     return 0
 
