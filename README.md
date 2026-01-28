@@ -10,6 +10,7 @@ Template inicial para relatório de obra em formato DOCX, usando placeholders pa
 - `docs/ui/index.html`: interface visual para montar o comando rapidamente.
 - `run_ui.bat`: atalho Windows para subir a interface localmente.
 - `app_server.py`: servidor local que executa o relatório ao clicar no botão.
+- `build_windows_installer.bat`: gera um executável Windows para rodar sem Python.
 
 ## Como gerar com IA (Python)
 
@@ -84,6 +85,16 @@ o relatório é gerado sem chamada à IA e a descrição informada é usada como
 ### Atalho no Windows
 
 Se preferir, execute o arquivo `run_ui.bat` para iniciar o servidor automaticamente.
+
+### Executável Windows (sem Python)
+
+Para demonstrar sem instalar Python, execute:
+
+```bat
+build_windows_installer.bat
+```
+
+O executável será criado em `dist/GrupoSetupRelatorios.exe`.
 
 ## Como testar
 

@@ -131,14 +131,15 @@ def _write_output(path: Path, content: str) -> None:
     path.write_text(content, encoding="utf-8")
 
 
-def _convert_to_docx(markdown_path: Path, docx_path: Path) -> None:
+def _convert_to_docx(markdown_path: Path, docx_path: Path) -> bool:
     if not shutil.which("pandoc"):
         logging.warning("pandoc não encontrado no PATH. Ignorando conversão para DOCX.")
-        return
+        return False
     subprocess.run(
         ["pandoc", str(markdown_path), "-o", str(docx_path)],
         check=True,
     )
+    return True
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -268,8 +269,9 @@ def main() -> int:
             logging.info("JSON salvo em %s.", args.output_json)
 
         if args.convert_docx:
-            _convert_to_docx(output_md, output_docx)
-            logging.info("DOCX gerado em %s.", output_docx)
+            converted = _convert_to_docx(output_md, output_docx)
+            if converted:
+                logging.info("DOCX gerado em %s.", output_docx)
     finally:
         logging.info(
             "Resumo de logs: debug=%d info=%d warning=%d error=%d critical=%d",
