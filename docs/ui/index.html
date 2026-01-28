@@ -19,17 +19,17 @@
         <span class="brand-mark">GS</span>
         <div>
           <p class="brand-title">Grupo Setup</p>
-          <p class="brand-subtitle">Gerador de Relatórios de Obra com IA</p>
+          <p class="brand-subtitle">Central de Relatórios Técnicos</p>
         </div>
       </div>
       <div class="hero-content">
-        <h1>Transforme descrições em relatórios DOCX prontos.</h1>
+        <h1>Relatórios de obra com precisão e padronização.</h1>
         <p>
-          Crie relatórios de obra completos a partir de linguagem natural. A IA extrai
-          campos estruturados, preenche o template e gera o arquivo final.
+          Utilize IA para interpretar o escopo da obra, preencher o template oficial e
+          gerar o arquivo DOCX final automaticamente.
         </p>
         <div class="hero-actions">
-          <button class="primary" id="copy-command">Copiar comando</button>
+          <button class="primary" id="run-report">Gerar relatório</button>
           <button class="secondary" id="reset-form">Limpar formulário</button>
         </div>
       </div>
@@ -37,8 +37,8 @@
 
     <main class="content">
       <section class="card">
-        <h2>1. Descrição da obra</h2>
-        <p>Informe o texto que a IA deve interpretar.</p>
+        <h2>Descrição da obra</h2>
+        <p>Descreva a obra de forma objetiva para a extração dos campos.</p>
         <textarea
           id="prompt"
           placeholder="Ex.: Relatório da obra com extensão MT, status PEP e registros fotográficos..."
@@ -47,7 +47,7 @@
 
       <section class="grid">
         <div class="card">
-          <h2>2. Configurações</h2>
+          <h2>Configurações</h2>
           <div class="field">
             <label for="model">Modelo</label>
             <input id="model" type="text" value="gpt-4o-mini" />
@@ -73,24 +73,11 @@
         </div>
 
         <div class="card">
-          <h2>3. Comando gerado</h2>
-          <p>Copie e execute no terminal.</p>
-          <pre id="command" class="command"></pre>
-          <div class="hint">
-            <span>Requer:</span>
-            <code>pip install -r requirements.txt</code>
-            <code>export OPENAI_API_KEY="sua-chave"</code>
-          </div>
+          <h2>Resumo da execução</h2>
+          <p>Confira o status, logs e mensagens da geração.</p>
+          <div class="status" id="status">Aguardando envio.</div>
+          <pre id="log" class="command"></pre>
         </div>
-      </section>
-
-      <section class="card info">
-        <h2>Checklist rápido</h2>
-        <ul>
-          <li>Template: <code>docs/template-obra.md</code></li>
-          <li>CLI Python: <code>generate_report.py</code></li>
-          <li>Logs com contador e arquivo opcional</li>
-        </ul>
       </section>
     </main>
 

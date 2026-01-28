@@ -4,56 +4,53 @@ const outputInput = document.getElementById("output");
 const jsonInput = document.getElementById("json");
 const convertToggle = document.getElementById("convert");
 const logToggle = document.getElementById("log-file");
-const commandOutput = document.getElementById("command");
-const copyButton = document.getElementById("copy-command");
+const statusOutput = document.getElementById("status");
+const logOutput = document.getElementById("log");
+const runButton = document.getElementById("run-report");
 const resetButton = document.getElementById("reset-form");
 
 const defaultPrompt =
   "Relatório de obra com extensão MT, status PEP, execução e registros fotográficos.";
 
-const buildCommand = () => {
-  const parts = [
-    "python generate_report.py",
-    `--prompt \"${(promptInput.value || defaultPrompt).replace(/\"/g, "'")}\"`,
-    `--model ${modelInput.value || "gpt-4o-mini"}`,
-    `--output-md ${outputInput.value || "relatorio.md"}`,
-  ];
+const buildPayload = () => ({
+  prompt: promptInput.value || defaultPrompt,
+  model: modelInput.value || "gpt-4o-mini",
+  output_md: outputInput.value || "relatorio.md",
+  output_json: jsonInput.value || "",
+  convert_docx: convertToggle.checked,
+  log_file: logToggle.checked ? "relatorio.log" : "",
+});
 
-  if (jsonInput.value) {
-    parts.push(`--output-json ${jsonInput.value}`);
-  }
-
-  if (convertToggle.checked) {
-    parts.push("--convert-docx");
-  }
-
-  if (logToggle.checked) {
-    parts.push("--log-file relatorio.log");
-  }
-
-  return parts.join(" \\\n  ");
+const updateStatus = (text, isError = false) => {
+  statusOutput.textContent = text;
+  statusOutput.style.borderColor = isError
+    ? "rgba(248, 113, 113, 0.4)"
+    : "rgba(79, 209, 197, 0.25)";
+  statusOutput.style.background = isError
+    ? "rgba(248, 113, 113, 0.1)"
+    : "rgba(79, 209, 197, 0.08)";
 };
 
-const updateCommand = () => {
-  commandOutput.textContent = buildCommand();
-};
+runButton.addEventListener("click", async () => {
+  updateStatus("Processando relatório...");
+  logOutput.textContent = "";
 
-[promptInput, modelInput, outputInput, jsonInput, convertToggle, logToggle].forEach(
-  (element) => {
-    element.addEventListener("input", updateCommand);
-    element.addEventListener("change", updateCommand);
-  }
-);
-
-copyButton.addEventListener("click", async () => {
   try {
-    await navigator.clipboard.writeText(commandOutput.textContent);
-    copyButton.textContent = "Copiado!";
-    setTimeout(() => {
-      copyButton.textContent = "Copiar comando";
-    }, 1600);
-  } catch {
-    copyButton.textContent = "Falha ao copiar";
+    const response = await fetch("/api/generate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(buildPayload()),
+    });
+    const data = await response.json();
+    const success = response.ok && data.returncode === 0;
+    updateStatus(
+      success ? "Relatório gerado com sucesso." : "Falha ao gerar relatório.",
+      !success
+    );
+    logOutput.textContent = [data.stdout, data.stderr].filter(Boolean).join("\n");
+  } catch (error) {
+    updateStatus("Erro ao conectar com o servidor local.", true);
+    logOutput.textContent = String(error);
   }
 });
 
@@ -64,8 +61,9 @@ resetButton.addEventListener("click", () => {
   jsonInput.value = "relatorio.json";
   convertToggle.checked = true;
   logToggle.checked = true;
-  updateCommand();
+  updateStatus("Aguardando envio.");
+  logOutput.textContent = "";
 });
 
 promptInput.value = defaultPrompt;
-updateCommand();
+updateStatus("Aguardando envio.");

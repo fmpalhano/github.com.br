@@ -2,13 +2,13 @@
 setlocal
 
 set "PORT=8000"
-set "UI_DIR=%~dp0docs\ui"
+set "APP_FILE=%~dp0app_server.py"
 
-if not exist "%UI_DIR%\index.html" (
-  echo Interface nao encontrada em %UI_DIR%.
+if not exist "%APP_FILE%" (
+  echo Arquivo %APP_FILE% nao encontrado.
   echo Verifique se o repositorio esta completo.
   exit /b 1
 )
 
 echo Iniciando servidor em http://localhost:%PORT%
-python -m http.server %PORT% --directory "%UI_DIR%"
+python "%APP_FILE%"

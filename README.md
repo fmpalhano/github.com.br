@@ -9,6 +9,7 @@ Template inicial para relatório de obra em formato DOCX, usando placeholders pa
 - `requirements.txt`: dependências do gerador.
 - `docs/ui/index.html`: interface visual para montar o comando rapidamente.
 - `run_ui.bat`: atalho Windows para subir a interface localmente.
+- `app_server.py`: servidor local que executa o relatório ao clicar no botão.
 
 ## Como gerar com IA (Python)
 
@@ -62,10 +63,10 @@ python generate_report.py --data-json relatorio.json
 
 ## Interface visual (Grupo Setup)
 
-Abra a interface estática para gerar o comando de execução:
+Abra a interface local para executar o relatório diretamente:
 
 ```bash
-python -m http.server 8000 --directory docs/ui
+python app_server.py
 ```
 
 Depois acesse `http://localhost:8000` no navegador.
