@@ -16,6 +16,9 @@ Template inicial para relatório de obra em formato DOCX, usando placeholders pa
 pip install -r requirements.txt
 ```
 
+> **Atenção:** o pacote correto é `openai` (com **AI**), não `openia`. Se aparecer erro como
+> `No matching distribution found for openia`, corrija o comando e execute novamente.
+
 2. Defina a variável de ambiente `OPENAI_API_KEY`.
 
 ```bash
