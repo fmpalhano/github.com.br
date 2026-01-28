@@ -99,14 +99,21 @@ def _call_openai(prompt: str, model: str) -> dict:
         "Se algum dado não existir, use string vazia ou listas vazias."
     )
     logging.info("Chamando OpenAI com modelo %s.", model)
-    response = client.chat.completions.create(
-        model=model,
-        messages=[
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": prompt},
-        ],
-        temperature=0.2,
-    )
+    try:
+        response = client.chat.completions.create(
+            model=model,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": prompt},
+            ],
+            temperature=0.2,
+        )
+    except openai.AuthenticationError as exc:
+        logging.error("Falha de autenticação com a OpenAI.")
+        raise RuntimeError(
+            "Chave OpenAI inválida ou ausente. "
+            "Verifique a variável OPENAI_API_KEY e gere uma nova chave, se necessário."
+        ) from exc
     content = response.choices[0].message.content
     logging.debug("Resposta bruta da IA recebida.")
     return _extract_json(content)
