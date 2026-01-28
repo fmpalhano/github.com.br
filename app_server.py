@@ -36,6 +36,7 @@ def generate_report() -> object:
     output_md = payload.get("output_md", "relatorio.md")
     output_json = payload.get("output_json", "")
     convert_docx = payload.get("convert_docx", "true").lower() == "true"
+    offline = payload.get("offline", "false").lower() == "true"
     log_file = payload.get("log_file", "relatorio.log")
 
     uploads = {"imagens_relatorio": [], "imagens_kpi": [], "dwg_arquivo": ""}
@@ -78,6 +79,9 @@ def generate_report() -> object:
         command.extend(["--output-json", output_json])
 
     command.extend(["--override-json", str(override_path)])
+
+    if offline:
+        command.append("--offline")
 
     if convert_docx:
         command.append("--convert-docx")

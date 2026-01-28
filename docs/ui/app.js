@@ -4,6 +4,7 @@ const outputInput = document.getElementById("output");
 const jsonInput = document.getElementById("json");
 const convertToggle = document.getElementById("convert");
 const logToggle = document.getElementById("log-file");
+const offlineToggle = document.getElementById("offline");
 const statusOutput = document.getElementById("status");
 const logOutput = document.getElementById("log");
 const runButton = document.getElementById("run-report");
@@ -22,6 +23,7 @@ const buildPayload = () => ({
   output_json: jsonInput.value || "",
   convert_docx: convertToggle.checked,
   log_file: logToggle.checked ? "relatorio.log" : "",
+  offline: offlineToggle.checked,
 });
 
 const updateStatus = (text, isError = false) => {
@@ -77,6 +79,7 @@ resetButton.addEventListener("click", () => {
   jsonInput.value = "relatorio.json";
   convertToggle.checked = true;
   logToggle.checked = true;
+  offlineToggle.checked = false;
   reportImagesInput.value = "";
   kpiImagesInput.value = "";
   dwgInput.value = "";

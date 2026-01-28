@@ -76,6 +76,11 @@ Depois acesse `http://localhost:8000` no navegador.
 A interface permite anexar imagens para o relatório e para o KPI, além de um arquivo DWG. Esses
 arquivos são adicionados ao template padrão em seções dedicadas e mantêm o layout A4.
 
+### Modo offline (gratuito)
+
+Se você quiser gerar sem consumir créditos, ative o **Modo offline** na interface. Nesse modo,
+o relatório é gerado sem chamada à IA e a descrição informada é usada como base do conteúdo.
+
 ### Atalho no Windows
 
 Se preferir, execute o arquivo `run_ui.bat` para iniciar o servidor automaticamente.

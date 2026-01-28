@@ -7,6 +7,7 @@ import re
 import shutil
 import subprocess
 import sys
+from datetime import date
 from pathlib import Path
 
 import openai
@@ -156,6 +157,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="JSON pronto com os dados (pula a chamada à IA).",
     )
     parser.add_argument(
+        "--offline",
+        action="store_true",
+        help="Gera relatório sem chamada à IA (modo offline).",
+    )
+    parser.add_argument(
         "--model",
         default=os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
         help="Modelo OpenAI (default: gpt-4o-mini).",
@@ -207,10 +213,39 @@ def main() -> int:
             logging.info("Dados carregados do JSON %s.", args.data_json)
         else:
             prompt = _load_prompt(args)
-            if not os.getenv("OPENAI_API_KEY"):
-                logging.error("OPENAI_API_KEY não definida.")
-                raise RuntimeError("Defina a variável OPENAI_API_KEY.")
-            data = _call_openai(prompt, args.model)
+            if args.offline:
+                data = {
+                    "titulo_obra": "Relatório de Obra",
+                    "cliente": "",
+                    "localidade": "",
+                    "data_relatorio": date.today().isoformat(),
+                    "imagem_capa": "",
+                    "descricao_obra": prompt,
+                    "extensao_mt_km": "",
+                    "extensao_bt_km": "",
+                    "total_postes": "",
+                    "pep_partes": [],
+                    "consideracoes_ressalvas": "",
+                    "materiais": "",
+                    "data_inicio": "",
+                    "data_previsao_conclusao": "",
+                    "equipamentos": [],
+                    "dificuldades": [],
+                    "curva_s": "",
+                    "observacoes_finais": "",
+                    "registros_fotograficos": [],
+                    "kpi_resumo": "",
+                    "kpi_indicadores": [],
+                    "imagens_relatorio": [],
+                    "imagens_kpi": [],
+                    "dwg_arquivo": "",
+                }
+                logging.info("Modo offline ativo. Relatório gerado sem IA.")
+            else:
+                if not os.getenv("OPENAI_API_KEY"):
+                    logging.error("OPENAI_API_KEY não definida.")
+                    raise RuntimeError("Defina a variável OPENAI_API_KEY.")
+                data = _call_openai(prompt, args.model)
 
         if args.override_json:
             override_data = _load_data_json(args.override_json)
