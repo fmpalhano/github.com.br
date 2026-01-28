@@ -78,6 +78,23 @@
 
 ---
 
+## KPI da obra
+
+**Resumo:**
+{{kpi_resumo}}
+
+**Indicadores:**
+{{#kpi_indicadores}}
+- {{nome}}: {{valor}} {{unidade}}
+{{/kpi_indicadores}}
+
+**Imagens de KPI:**
+{{#imagens_kpi}}
+![{{legenda}}]({{caminho}})
+{{/imagens_kpi}}
+
+---
+
 ## Registros fotográficos da obra
 
 {{#registros_fotograficos}}
@@ -90,3 +107,17 @@
 {{/itens}}
 
 {{/registros_fotograficos}}
+
+---
+
+## Imagens gerais do relatório
+
+{{#imagens_relatorio}}
+![{{legenda}}]({{caminho}})
+{{/imagens_relatorio}}
+
+---
+
+## Anexo DWG (quando aplicável)
+
+Arquivo: {{dwg_arquivo}}

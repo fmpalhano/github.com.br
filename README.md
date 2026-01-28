@@ -71,6 +71,11 @@ python app_server.py
 
 Depois acesse `http://localhost:8000` no navegador.
 
+### Imagens, KPI e DWG
+
+A interface permite anexar imagens para o relatório e para o KPI, além de um arquivo DWG. Esses
+arquivos são adicionados ao template padrão em seções dedicadas e mantêm o layout A4.
+
 ### Atalho no Windows
 
 Se preferir, execute o arquivo `run_ui.bat` para iniciar o servidor automaticamente.

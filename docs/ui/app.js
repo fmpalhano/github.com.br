@@ -8,6 +8,9 @@ const statusOutput = document.getElementById("status");
 const logOutput = document.getElementById("log");
 const runButton = document.getElementById("run-report");
 const resetButton = document.getElementById("reset-form");
+const reportImagesInput = document.getElementById("images-report");
+const kpiImagesInput = document.getElementById("images-kpi");
+const dwgInput = document.getElementById("dwg");
 
 const defaultPrompt =
   "Relatório de obra com extensão MT, status PEP, execução e registros fotográficos.";
@@ -36,10 +39,23 @@ runButton.addEventListener("click", async () => {
   logOutput.textContent = "";
 
   try {
+    const payload = buildPayload();
+    const formData = new FormData();
+    Object.entries(payload).forEach(([key, value]) => formData.append(key, value));
+
+    Array.from(reportImagesInput.files).forEach((file) =>
+      formData.append("imagens_relatorio", file)
+    );
+    Array.from(kpiImagesInput.files).forEach((file) =>
+      formData.append("imagens_kpi", file)
+    );
+    if (dwgInput.files[0]) {
+      formData.append("dwg_arquivo", dwgInput.files[0]);
+    }
+
     const response = await fetch("/api/generate", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(buildPayload()),
+      body: formData,
     });
     const data = await response.json();
     const success = response.ok && data.returncode === 0;
@@ -61,6 +77,9 @@ resetButton.addEventListener("click", () => {
   jsonInput.value = "relatorio.json";
   convertToggle.checked = true;
   logToggle.checked = true;
+  reportImagesInput.value = "";
+  kpiImagesInput.value = "";
+  dwgInput.value = "";
   updateStatus("Aguardando envio.");
   logOutput.textContent = "";
 });

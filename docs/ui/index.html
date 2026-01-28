@@ -15,18 +15,26 @@
   <body>
     <div class="background-glow"></div>
     <header class="hero">
-      <div class="brand">
-        <span class="brand-mark">GS</span>
-        <div>
-          <p class="brand-title">Grupo Setup</p>
-          <p class="brand-subtitle">Central de Relatórios Técnicos</p>
+      <nav class="nav">
+        <div class="brand">
+          <span class="brand-mark">GS</span>
+          <div>
+            <p class="brand-title">Grupo Setup</p>
+            <p class="brand-subtitle">Relatórios & KPI</p>
+          </div>
         </div>
-      </div>
+        <div class="nav-links">
+          <a href="#">Quem somos</a>
+          <a href="#">Especialidades</a>
+          <a href="#">Central de atendimento</a>
+          <a href="#">Área do Cliente</a>
+        </div>
+      </nav>
       <div class="hero-content">
-        <h1>Relatórios de obra com precisão e padronização.</h1>
+        <h1>Feita de gente, a serviço das pessoas.</h1>
         <p>
-          Utilize IA para interpretar o escopo da obra, preencher o template oficial e
-          gerar o arquivo DOCX final automaticamente.
+          Plataforma 2026 para relatórios técnicos A4 e KPI com IA, imagens e anexos
+          padronizados para o Grupo Setup.
         </p>
         <div class="hero-actions">
           <button class="primary" id="run-report">Gerar relatório</button>
@@ -73,16 +81,33 @@
         </div>
 
         <div class="card">
-          <h2>Resumo da execução</h2>
-          <p>Confira o status, logs e mensagens da geração.</p>
-          <div class="status" id="status">Aguardando envio.</div>
-          <pre id="log" class="command"></pre>
+          <h2>Arquivos e anexos</h2>
+          <p>Adicione imagens e arquivos DWG para o relatório e KPI.</p>
+          <div class="field">
+            <label for="images-report">Imagens do relatório</label>
+            <input id="images-report" type="file" multiple />
+          </div>
+          <div class="field">
+            <label for="images-kpi">Imagens de KPI</label>
+            <input id="images-kpi" type="file" multiple />
+          </div>
+          <div class="field">
+            <label for="dwg">Arquivo DWG</label>
+            <input id="dwg" type="file" accept=".dwg" />
+          </div>
         </div>
+      </section>
+
+      <section class="card">
+        <h2>Resumo da execução</h2>
+        <p>Confira o status, logs e mensagens da geração.</p>
+        <div class="status" id="status">Aguardando envio.</div>
+        <pre id="log" class="command"></pre>
       </section>
     </main>
 
     <footer>
-      <p>Grupo Setup © 2025 • Interface de apoio ao gerador de relatórios</p>
+      <p>Grupo Setup © 2026 • Felipe de Moraes Palhano</p>
     </footer>
 
     <script src="app.js"></script>

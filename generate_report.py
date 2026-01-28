@@ -89,10 +89,13 @@ def _call_openai(prompt: str, model: str) -> dict:
         "extensao_mt_km, extensao_bt_km, total_postes, pep_partes (lista), "
         "consideracoes_ressalvas, materiais, data_inicio, data_previsao_conclusao, "
         "equipamentos (lista), dificuldades (lista), curva_s, observacoes_finais, "
-        "registros_fotograficos (lista). "
+        "registros_fotograficos (lista), kpi_resumo, kpi_indicadores (lista), "
+        "imagens_relatorio (lista), imagens_kpi (lista), dwg_arquivo. "
         "Cada item de pep_partes deve ter: parte_nome, obra, pep, poste, status. "
         "Cada item de registros_fotograficos deve ter: secao e itens (lista). "
         "Cada item em itens deve ter: foto e descricao. "
+        "Cada item de kpi_indicadores deve ter: nome, valor, unidade. "
+        "Cada item de imagens_relatorio e imagens_kpi deve ter: caminho e legenda. "
         "Se algum dado não existir, use string vazia ou listas vazias."
     )
     logging.info("Chamando OpenAI com modelo %s.", model)
@@ -170,6 +173,10 @@ def build_parser() -> argparse.ArgumentParser:
         help="Salva o JSON gerado pela IA.",
     )
     parser.add_argument(
+        "--override-json",
+        help="JSON com campos que sobrescrevem o resultado da IA.",
+    )
+    parser.add_argument(
         "--log-level",
         default="INFO",
         choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
@@ -197,6 +204,11 @@ def main() -> int:
                 logging.error("OPENAI_API_KEY não definida.")
                 raise RuntimeError("Defina a variável OPENAI_API_KEY.")
             data = _call_openai(prompt, args.model)
+
+        if args.override_json:
+            override_data = _load_data_json(args.override_json)
+            data.update(override_data)
+            logging.info("Campos sobrescritos via %s.", args.override_json)
 
         template_path = Path(args.template)
         output_md = Path(args.output_md)
