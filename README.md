@@ -8,6 +8,7 @@ Template inicial para relatório de obra em formato DOCX, usando placeholders pa
 - `generate_report.py`: script em Python que usa IA online para preencher o template.
 - `requirements.txt`: dependências do gerador.
 - `docs/ui/index.html`: interface visual para montar o comando rapidamente.
+- `run_ui.bat`: atalho Windows para subir a interface localmente.
 
 ## Como gerar com IA (Python)
 
@@ -68,6 +69,10 @@ python -m http.server 8000 --directory docs/ui
 ```
 
 Depois acesse `http://localhost:8000` no navegador.
+
+### Atalho no Windows
+
+Se preferir, execute o arquivo `run_ui.bat` para iniciar o servidor automaticamente.
 
 ## Como testar
 
