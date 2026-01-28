@@ -133,8 +133,8 @@ def _write_output(path: Path, content: str) -> None:
 
 def _convert_to_docx(markdown_path: Path, docx_path: Path) -> None:
     if not shutil.which("pandoc"):
-        logging.error("pandoc não encontrado no PATH.")
-        raise RuntimeError("pandoc não encontrado no PATH.")
+        logging.warning("pandoc não encontrado no PATH. Ignorando conversão para DOCX.")
+        return
     subprocess.run(
         ["pandoc", str(markdown_path), "-o", str(docx_path)],
         check=True,
