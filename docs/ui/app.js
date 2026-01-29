@@ -1,6 +1,5 @@
 const promptInput = document.getElementById("prompt");
 const modelInput = document.getElementById("model");
-const providerInput = document.getElementById("provider");
 const ollamaUrlInput = document.getElementById("ollama-url");
 const outputInput = document.getElementById("output");
 const jsonInput = document.getElementById("json");
@@ -20,8 +19,7 @@ const defaultPrompt =
 
 const buildPayload = () => ({
   prompt: promptInput.value || defaultPrompt,
-  provider: providerInput.value,
-  model: modelInput.value || "gpt-4o-mini",
+  model: modelInput.value || "llama3.1",
   ollama_url: ollamaUrlInput.value || "http://localhost:11434",
   output_md: outputInput.value || "relatorio.md",
   output_json: jsonInput.value || "",
@@ -78,8 +76,7 @@ runButton.addEventListener("click", async () => {
 
 resetButton.addEventListener("click", () => {
   promptInput.value = "";
-  modelInput.value = "gpt-4o-mini";
-  providerInput.value = "openai";
+  modelInput.value = "llama3.1";
   ollamaUrlInput.value = "http://localhost:11434";
   outputInput.value = "relatorio.md";
   jsonInput.value = "relatorio.json";

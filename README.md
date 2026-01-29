@@ -1,18 +1,18 @@
 # github.com.br
 
-Template inicial para relatório de obra em formato DOCX, usando placeholders para geração automática e um gerador em Python com IA online.
+Template inicial para relatório de obra em formato DOCX, usando placeholders para geração automática e um gerador em Python com IA local via Ollama.
 
 ## Arquivos
 
 - `docs/template-obra.md`: modelo de template com campos configuráveis.
-- `generate_report.py`: script em Python que usa IA online para preencher o template.
+- `generate_report.py`: script em Python que usa IA local (Ollama) para preencher o template.
 - `requirements.txt`: dependências do gerador.
 - `docs/ui/index.html`: interface visual para montar o comando rapidamente.
 - `run_ui.bat`: atalho Windows para subir a interface localmente.
 - `app_server.py`: servidor local que executa o relatório ao clicar no botão.
 - `build_windows_installer.bat`: gera um executável Windows para rodar sem Python.
 
-## Como gerar com IA (Python)
+## Como gerar com IA local (Ollama)
 
 1. Instale as dependências:
 
@@ -20,37 +20,31 @@ Template inicial para relatório de obra em formato DOCX, usando placeholders pa
 pip install -r requirements.txt
 ```
 
-> **Atenção:** o pacote correto é `openai` (com **AI**), não `openia`. Se aparecer erro como
-> `No matching distribution found for openia`, corrija o comando e execute novamente.
-
-2. Defina a variável de ambiente `OPENAI_API_KEY`.
-
-```bash
-export OPENAI_API_KEY="sua-chave"
-```
-
-3. Rode o gerador passando a descrição da obra:
+2. Rode o gerador passando a descrição da obra:
 
 ```bash
 python generate_report.py \\
-  --prompt "Relatório de obra com nome, localidade, status PEP e registros fotográficos."
+  --prompt "Relatório de obra com nome, localidade, status PEP e registros fotográficos." \\
+  --model llama3.1
 ```
 
 > Dica: use `--log-file relatorio.log` para salvar os logs em arquivo e acompanhar o contador no final.
 
-4. Para converter o Markdown gerado em DOCX (requer `pandoc`):
+3. Para converter o Markdown gerado em DOCX (requer `pandoc`):
 
 ```bash
 python generate_report.py \\
   --prompt "Relatório completo da obra com medições e dificuldades." \\
+  --model llama3.1 \\
   --convert-docx
 ```
 
-5. Para salvar o JSON retornado pela IA:
+4. Para salvar o JSON retornado pela IA:
 
 ```bash
 python generate_report.py \\
   --prompt "Relatório de obra com cronograma." \\
+  --model llama3.1 \\
   --output-json relatorio.json
 ```
 
@@ -84,8 +78,8 @@ o relatório é gerado sem chamada à IA e a descrição informada é usada como
 
 ### Ollama (IA local gratuita)
 
-Se o Ollama estiver instalado, selecione **Ollama (local)** e informe o modelo desejado
-(ex.: `llama3.1`). O servidor deve estar ativo em `http://localhost:11434` ou na URL indicada.
+Com o Ollama instalado e em execução, informe o modelo desejado (ex.: `llama3.1`).
+O servidor deve estar ativo em `http://localhost:11434` ou na URL indicada.
 
 ### Atalho no Windows
 

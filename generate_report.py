@@ -11,7 +11,6 @@ from datetime import date
 from pathlib import Path
 from urllib import request as urlrequest
 
-import openai
 import pystache
 
 
@@ -82,45 +81,6 @@ def _load_data_json(path: str) -> dict:
     return json.loads(Path(path).read_text(encoding="utf-8"))
 
 
-def _call_openai(prompt: str, model: str) -> dict:
-    client = openai.OpenAI()
-    system_prompt = (
-        "Você é um assistente que extrai dados para preencher um template de relatório de obra. "
-        "Responda APENAS com um JSON válido. Use exatamente estas chaves: "
-        "titulo_obra, cliente, localidade, data_relatorio, imagem_capa, descricao_obra, "
-        "extensao_mt_km, extensao_bt_km, total_postes, pep_partes (lista), "
-        "consideracoes_ressalvas, materiais, data_inicio, data_previsao_conclusao, "
-        "equipamentos (lista), dificuldades (lista), curva_s, observacoes_finais, "
-        "registros_fotograficos (lista), kpi_resumo, kpi_indicadores (lista), "
-        "imagens_relatorio (lista), imagens_kpi (lista), dwg_arquivo. "
-        "Cada item de pep_partes deve ter: parte_nome, obra, pep, poste, status. "
-        "Cada item de registros_fotograficos deve ter: secao e itens (lista). "
-        "Cada item em itens deve ter: foto e descricao. "
-        "Cada item de kpi_indicadores deve ter: nome, valor, unidade. "
-        "Cada item de imagens_relatorio e imagens_kpi deve ter: caminho e legenda. "
-        "Se algum dado não existir, use string vazia ou listas vazias."
-    )
-    logging.info("Chamando OpenAI com modelo %s.", model)
-    try:
-        response = client.chat.completions.create(
-            model=model,
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": prompt},
-            ],
-            temperature=0.2,
-        )
-    except openai.AuthenticationError as exc:
-        logging.error("Falha de autenticação com a OpenAI.")
-        raise RuntimeError(
-            "Chave OpenAI inválida ou ausente. "
-            "Verifique a variável OPENAI_API_KEY e gere uma nova chave, se necessário."
-        ) from exc
-    content = response.choices[0].message.content
-    logging.debug("Resposta bruta da IA recebida.")
-    return _extract_json(content)
-
-
 def _call_ollama(prompt: str, model: str, base_url: str) -> dict:
     system_prompt = (
         "Você é um assistente que extrai dados para preencher um template de relatório de obra. "
@@ -149,7 +109,7 @@ def _call_ollama(prompt: str, model: str, base_url: str) -> dict:
         }
     ).encode("utf-8")
     endpoint = base_url.rstrip("/") + "/api/chat"
-    logging.info("Chamando Ollama em %s com modelo %s.", endpoint, model)
+    logging.info("Conectando ao Ollama (%s) com o modelo %s.", endpoint, model)
     req = urlrequest.Request(
         endpoint,
         data=payload,
@@ -159,7 +119,7 @@ def _call_ollama(prompt: str, model: str, base_url: str) -> dict:
         with urlrequest.urlopen(req, timeout=60) as response:
             body = response.read().decode("utf-8")
     except Exception as exc:  # noqa: BLE001
-        logging.error("Falha ao chamar Ollama.")
+        logging.error("Não foi possível falar com o Ollama.")
         raise RuntimeError(
             "Não foi possível acessar o Ollama. Verifique se o serviço está ativo "
             "em http://localhost:11434 e se o modelo está instalado."
@@ -168,7 +128,7 @@ def _call_ollama(prompt: str, model: str, base_url: str) -> dict:
     data = json.loads(body)
     content = data.get("message", {}).get("content", "")
     if not content:
-        raise RuntimeError("Resposta vazia do Ollama.")
+        raise RuntimeError("A resposta do Ollama veio vazia.")
     return _extract_json(content)
 
 
@@ -185,7 +145,7 @@ def _write_output(path: Path, content: str) -> None:
 
 def _convert_to_docx(markdown_path: Path, docx_path: Path) -> bool:
     if not shutil.which("pandoc"):
-        logging.warning("pandoc não encontrado no PATH. Ignorando conversão para DOCX.")
+        logging.warning("Pandoc não encontrado. O relatório DOCX não será gerado.")
         return False
     subprocess.run(
         ["pandoc", str(markdown_path), "-o", str(docx_path)],
@@ -216,14 +176,8 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--model",
-        default=os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
-        help="Modelo OpenAI (default: gpt-4o-mini).",
-    )
-    parser.add_argument(
-        "--provider",
-        default="openai",
-        choices=["openai", "ollama"],
-        help="Provedor de IA (openai ou ollama).",
+        default=os.getenv("OLLAMA_MODEL", "llama3.1"),
+        help="Modelo do Ollama (default: llama3.1).",
     )
     parser.add_argument(
         "--ollama-url",
@@ -274,7 +228,7 @@ def main() -> int:
     try:
         if args.data_json:
             data = _load_data_json(args.data_json)
-            logging.info("Dados carregados do JSON %s.", args.data_json)
+            logging.info("Dados carregados do arquivo %s.", args.data_json)
         else:
             prompt = _load_prompt(args)
             if args.offline:
@@ -304,20 +258,14 @@ def main() -> int:
                     "imagens_kpi": [],
                     "dwg_arquivo": "",
                 }
-                logging.info("Modo offline ativo. Relatório gerado sem IA.")
+                logging.info("Modo offline ativado: relatório gerado sem IA.")
             else:
-                if args.provider == "ollama":
-                    data = _call_ollama(prompt, args.model, args.ollama_url)
-                else:
-                    if not os.getenv("OPENAI_API_KEY"):
-                        logging.error("OPENAI_API_KEY não definida.")
-                        raise RuntimeError("Defina a variável OPENAI_API_KEY.")
-                    data = _call_openai(prompt, args.model)
+                data = _call_ollama(prompt, args.model, args.ollama_url)
 
         if args.override_json:
             override_data = _load_data_json(args.override_json)
             data.update(override_data)
-            logging.info("Campos sobrescritos via %s.", args.override_json)
+            logging.info("Dados atualizados com o arquivo %s.", args.override_json)
 
         template_path = Path(args.template)
         output_md = Path(args.output_md)
@@ -325,19 +273,19 @@ def main() -> int:
 
         rendered = _render_template(template_path, data)
         _write_output(output_md, rendered)
-        logging.info("Markdown gerado em %s.", output_md)
+        logging.info("Relatório em Markdown salvo em %s.", output_md)
 
         if args.output_json:
             _write_output(
                 Path(args.output_json),
                 json.dumps(data, ensure_ascii=False, indent=2),
             )
-            logging.info("JSON salvo em %s.", args.output_json)
+            logging.info("Dados em JSON salvos em %s.", args.output_json)
 
         if args.convert_docx:
             converted = _convert_to_docx(output_md, output_docx)
             if converted:
-                logging.info("DOCX gerado em %s.", output_docx)
+                logging.info("Relatório DOCX gerado em %s.", output_docx)
     finally:
         logging.info(
             "Resumo de logs: debug=%d info=%d warning=%d error=%d critical=%d",
