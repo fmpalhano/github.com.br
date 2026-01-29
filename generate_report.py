@@ -9,6 +9,7 @@ import subprocess
 import sys
 from datetime import date
 from pathlib import Path
+from urllib import request as urlrequest
 
 import openai
 import pystache
@@ -120,6 +121,57 @@ def _call_openai(prompt: str, model: str) -> dict:
     return _extract_json(content)
 
 
+def _call_ollama(prompt: str, model: str, base_url: str) -> dict:
+    system_prompt = (
+        "Você é um assistente que extrai dados para preencher um template de relatório de obra. "
+        "Responda APENAS com um JSON válido. Use exatamente estas chaves: "
+        "titulo_obra, cliente, localidade, data_relatorio, imagem_capa, descricao_obra, "
+        "extensao_mt_km, extensao_bt_km, total_postes, pep_partes (lista), "
+        "consideracoes_ressalvas, materiais, data_inicio, data_previsao_conclusao, "
+        "equipamentos (lista), dificuldades (lista), curva_s, observacoes_finais, "
+        "registros_fotograficos (lista), kpi_resumo, kpi_indicadores (lista), "
+        "imagens_relatorio (lista), imagens_kpi (lista), dwg_arquivo. "
+        "Cada item de pep_partes deve ter: parte_nome, obra, pep, poste, status. "
+        "Cada item de registros_fotograficos deve ter: secao e itens (lista). "
+        "Cada item em itens deve ter: foto e descricao. "
+        "Cada item de kpi_indicadores deve ter: nome, valor, unidade. "
+        "Cada item de imagens_relatorio e imagens_kpi deve ter: caminho e legenda. "
+        "Se algum dado não existir, use string vazia ou listas vazias."
+    )
+    payload = json.dumps(
+        {
+            "model": model,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": prompt},
+            ],
+            "stream": False,
+        }
+    ).encode("utf-8")
+    endpoint = base_url.rstrip("/") + "/api/chat"
+    logging.info("Chamando Ollama em %s com modelo %s.", endpoint, model)
+    req = urlrequest.Request(
+        endpoint,
+        data=payload,
+        headers={"Content-Type": "application/json"},
+    )
+    try:
+        with urlrequest.urlopen(req, timeout=60) as response:
+            body = response.read().decode("utf-8")
+    except Exception as exc:  # noqa: BLE001
+        logging.error("Falha ao chamar Ollama.")
+        raise RuntimeError(
+            "Não foi possível acessar o Ollama. Verifique se o serviço está ativo "
+            "em http://localhost:11434 e se o modelo está instalado."
+        ) from exc
+
+    data = json.loads(body)
+    content = data.get("message", {}).get("content", "")
+    if not content:
+        raise RuntimeError("Resposta vazia do Ollama.")
+    return _extract_json(content)
+
+
 def _render_template(template_path: Path, data: dict) -> str:
     template = template_path.read_text(encoding="utf-8")
     renderer = pystache.Renderer(escape=lambda u: u)
@@ -166,6 +218,17 @@ def build_parser() -> argparse.ArgumentParser:
         "--model",
         default=os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
         help="Modelo OpenAI (default: gpt-4o-mini).",
+    )
+    parser.add_argument(
+        "--provider",
+        default="openai",
+        choices=["openai", "ollama"],
+        help="Provedor de IA (openai ou ollama).",
+    )
+    parser.add_argument(
+        "--ollama-url",
+        default=os.getenv("OLLAMA_URL", "http://localhost:11434"),
+        help="URL base do Ollama (default: http://localhost:11434).",
     )
     parser.add_argument(
         "--output-md",
@@ -243,10 +306,13 @@ def main() -> int:
                 }
                 logging.info("Modo offline ativo. Relatório gerado sem IA.")
             else:
-                if not os.getenv("OPENAI_API_KEY"):
-                    logging.error("OPENAI_API_KEY não definida.")
-                    raise RuntimeError("Defina a variável OPENAI_API_KEY.")
-                data = _call_openai(prompt, args.model)
+                if args.provider == "ollama":
+                    data = _call_ollama(prompt, args.model, args.ollama_url)
+                else:
+                    if not os.getenv("OPENAI_API_KEY"):
+                        logging.error("OPENAI_API_KEY não definida.")
+                        raise RuntimeError("Defina a variável OPENAI_API_KEY.")
+                    data = _call_openai(prompt, args.model)
 
         if args.override_json:
             override_data = _load_data_json(args.override_json)

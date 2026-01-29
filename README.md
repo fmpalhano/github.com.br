@@ -82,6 +82,11 @@ arquivos são adicionados ao template padrão em seções dedicadas e mantêm o 
 Se você quiser gerar sem consumir créditos, ative o **Modo offline** na interface. Nesse modo,
 o relatório é gerado sem chamada à IA e a descrição informada é usada como base do conteúdo.
 
+### Ollama (IA local gratuita)
+
+Se o Ollama estiver instalado, selecione **Ollama (local)** e informe o modelo desejado
+(ex.: `llama3.1`). O servidor deve estar ativo em `http://localhost:11434` ou na URL indicada.
+
 ### Atalho no Windows
 
 Se preferir, execute o arquivo `run_ui.bat` para iniciar o servidor automaticamente.

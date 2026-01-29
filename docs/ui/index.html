@@ -57,8 +57,19 @@
         <div class="card">
           <h2>Configurações</h2>
           <div class="field">
+            <label for="provider">Provedor</label>
+            <select id="provider">
+              <option value="openai" selected>OpenAI</option>
+              <option value="ollama">Ollama (local)</option>
+            </select>
+          </div>
+          <div class="field">
             <label for="model">Modelo</label>
             <input id="model" type="text" value="gpt-4o-mini" />
+          </div>
+          <div class="field">
+            <label for="ollama-url">URL do Ollama</label>
+            <input id="ollama-url" type="text" value="http://localhost:11434" />
           </div>
           <div class="field">
             <label for="output">Arquivo de saída (Markdown)</label>

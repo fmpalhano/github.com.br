@@ -1,5 +1,7 @@
 const promptInput = document.getElementById("prompt");
 const modelInput = document.getElementById("model");
+const providerInput = document.getElementById("provider");
+const ollamaUrlInput = document.getElementById("ollama-url");
 const outputInput = document.getElementById("output");
 const jsonInput = document.getElementById("json");
 const convertToggle = document.getElementById("convert");
@@ -18,7 +20,9 @@ const defaultPrompt =
 
 const buildPayload = () => ({
   prompt: promptInput.value || defaultPrompt,
+  provider: providerInput.value,
   model: modelInput.value || "gpt-4o-mini",
+  ollama_url: ollamaUrlInput.value || "http://localhost:11434",
   output_md: outputInput.value || "relatorio.md",
   output_json: jsonInput.value || "",
   convert_docx: convertToggle.checked,
@@ -75,6 +79,8 @@ runButton.addEventListener("click", async () => {
 resetButton.addEventListener("click", () => {
   promptInput.value = "";
   modelInput.value = "gpt-4o-mini";
+  providerInput.value = "openai";
+  ollamaUrlInput.value = "http://localhost:11434";
   outputInput.value = "relatorio.md";
   jsonInput.value = "relatorio.json";
   convertToggle.checked = true;

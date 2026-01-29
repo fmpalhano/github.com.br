@@ -33,6 +33,8 @@ def generate_report() -> object:
         return jsonify({"error": "Informe a descrição da obra."}), 400
 
     model = payload.get("model", "gpt-4o-mini")
+    provider = payload.get("provider", "openai")
+    ollama_url = payload.get("ollama_url", "http://localhost:11434")
     output_md = payload.get("output_md", "relatorio.md")
     output_json = payload.get("output_json", "")
     convert_docx = payload.get("convert_docx", "true").lower() == "true"
@@ -74,6 +76,9 @@ def generate_report() -> object:
         "--output-md",
         output_md,
     ]
+    command.extend(["--provider", provider])
+    if provider == "ollama":
+        command.extend(["--ollama-url", ollama_url])
 
     if output_json:
         command.extend(["--output-json", output_json])
