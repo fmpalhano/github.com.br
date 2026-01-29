@@ -32,7 +32,7 @@ def generate_report() -> object:
     if not prompt:
         return jsonify({"error": "Informe a descrição da obra."}), 400
 
-    model = payload.get("model", "llama3.1")
+    model = payload.get("model", "deepseek v3.1:671b-cloud")
     ollama_url = payload.get("ollama_url", "http://localhost:11434")
     output_md = payload.get("output_md", "relatorio.md")
     output_json = payload.get("output_json", "")

@@ -181,8 +181,8 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--model",
-        default=os.getenv("OLLAMA_MODEL", "llama3.1"),
-        help="Modelo do Ollama (default: llama3.1).",
+        default=os.getenv("OLLAMA_MODEL", "deepseek v3.1:671b-cloud"),
+        help="Modelo do Ollama (default: deepseek v3.1:671b-cloud).",
     )
     parser.add_argument(
         "--ollama-url",

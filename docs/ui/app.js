@@ -20,7 +20,7 @@ const defaultPrompt =
 
 const buildPayload = () => ({
   prompt: promptInput.value || defaultPrompt,
-  model: modelInput.value || "llama3.1",
+  model: modelInput.value || "deepseek v3.1:671b-cloud",
   ollama_url: ollamaUrlInput.value || "http://localhost:11434",
   ollama_timeout: ollamaTimeoutInput.value || "180",
   output_md: outputInput.value || "relatorio.md",
@@ -78,7 +78,7 @@ runButton.addEventListener("click", async () => {
 
 resetButton.addEventListener("click", () => {
   promptInput.value = "";
-  modelInput.value = "llama3.1";
+  modelInput.value = "deepseek v3.1:671b-cloud";
   ollamaUrlInput.value = "http://localhost:11434";
   ollamaTimeoutInput.value = "180";
   outputInput.value = "relatorio.md";

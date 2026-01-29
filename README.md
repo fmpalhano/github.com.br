@@ -25,7 +25,7 @@ pip install -r requirements.txt
 ```bash
 python generate_report.py \\
   --prompt "Relatório de obra com nome, localidade, status PEP e registros fotográficos." \\
-  --model llama3.1
+  --model "deepseek v3.1:671b-cloud"
 ```
 
 > Dica: use `--log-file relatorio.log` para salvar os logs em arquivo e acompanhar o contador no final.
@@ -35,7 +35,7 @@ python generate_report.py \\
 ```bash
 python generate_report.py \\
   --prompt "Relatório completo da obra com medições e dificuldades." \\
-  --model llama3.1 \\
+  --model "deepseek v3.1:671b-cloud" \\
   --convert-docx
 ```
 
@@ -44,7 +44,7 @@ python generate_report.py \\
 ```bash
 python generate_report.py \\
   --prompt "Relatório de obra com cronograma." \\
-  --model llama3.1 \\
+  --model "deepseek v3.1:671b-cloud" \\
   --output-json relatorio.json
 ```
 
@@ -78,7 +78,7 @@ o relatório é gerado sem chamada à IA e a descrição informada é usada como
 
 ### Ollama (IA local gratuita)
 
-Com o Ollama instalado e em execução, informe o modelo desejado (ex.: `llama3.1`).
+Com o Ollama instalado e em execução, informe o modelo desejado (ex.: `deepseek v3.1:671b-cloud`).
 O servidor deve estar ativo em `http://localhost:11434` ou na URL indicada.
 
 Se o modelo demorar para responder, ajuste o **tempo de espera** na interface ou use
