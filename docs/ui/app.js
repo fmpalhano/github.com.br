@@ -1,6 +1,7 @@
 const promptInput = document.getElementById("prompt");
 const modelInput = document.getElementById("model");
 const ollamaUrlInput = document.getElementById("ollama-url");
+const ollamaTimeoutInput = document.getElementById("ollama-timeout");
 const outputInput = document.getElementById("output");
 const jsonInput = document.getElementById("json");
 const convertToggle = document.getElementById("convert");
@@ -21,6 +22,7 @@ const buildPayload = () => ({
   prompt: promptInput.value || defaultPrompt,
   model: modelInput.value || "llama3.1",
   ollama_url: ollamaUrlInput.value || "http://localhost:11434",
+  ollama_timeout: ollamaTimeoutInput.value || "180",
   output_md: outputInput.value || "relatorio.md",
   output_json: jsonInput.value || "",
   convert_docx: convertToggle.checked,
@@ -78,6 +80,7 @@ resetButton.addEventListener("click", () => {
   promptInput.value = "";
   modelInput.value = "llama3.1";
   ollamaUrlInput.value = "http://localhost:11434";
+  ollamaTimeoutInput.value = "180";
   outputInput.value = "relatorio.md";
   jsonInput.value = "relatorio.json";
   convertToggle.checked = true;

@@ -39,6 +39,7 @@ def generate_report() -> object:
     convert_docx = payload.get("convert_docx", "true").lower() == "true"
     offline = payload.get("offline", "false").lower() == "true"
     log_file = payload.get("log_file", "relatorio.log")
+    ollama_timeout = payload.get("ollama_timeout", "180")
 
     uploads = {"imagens_relatorio": [], "imagens_kpi": [], "dwg_arquivo": ""}
     UPLOADS_DIR.mkdir(exist_ok=True)
@@ -76,6 +77,7 @@ def generate_report() -> object:
         output_md,
     ]
     command.extend(["--ollama-url", ollama_url])
+    command.extend(["--ollama-timeout", ollama_timeout])
 
     if output_json:
         command.extend(["--output-json", output_json])

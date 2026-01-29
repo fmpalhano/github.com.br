@@ -81,7 +81,7 @@ def _load_data_json(path: str) -> dict:
     return json.loads(Path(path).read_text(encoding="utf-8"))
 
 
-def _call_ollama(prompt: str, model: str, base_url: str) -> dict:
+def _call_ollama(prompt: str, model: str, base_url: str, timeout_s: int) -> dict:
     system_prompt = (
         "Você é um assistente que extrai dados para preencher um template de relatório de obra. "
         "Responda APENAS com um JSON válido. Use exatamente estas chaves: "
@@ -116,8 +116,13 @@ def _call_ollama(prompt: str, model: str, base_url: str) -> dict:
         headers={"Content-Type": "application/json"},
     )
     try:
-        with urlrequest.urlopen(req, timeout=60) as response:
+        with urlrequest.urlopen(req, timeout=timeout_s) as response:
             body = response.read().decode("utf-8")
+    except TimeoutError as exc:
+        logging.error("O Ollama demorou para responder.")
+        raise RuntimeError(
+            "O Ollama demorou para responder. Tente novamente ou aumente o tempo de espera."
+        ) from exc
     except Exception as exc:  # noqa: BLE001
         logging.error("Não foi possível falar com o Ollama.")
         raise RuntimeError(
@@ -183,6 +188,12 @@ def build_parser() -> argparse.ArgumentParser:
         "--ollama-url",
         default=os.getenv("OLLAMA_URL", "http://localhost:11434"),
         help="URL base do Ollama (default: http://localhost:11434).",
+    )
+    parser.add_argument(
+        "--ollama-timeout",
+        type=int,
+        default=int(os.getenv("OLLAMA_TIMEOUT", "180")),
+        help="Tempo máximo de espera do Ollama em segundos (default: 180).",
     )
     parser.add_argument(
         "--output-md",
@@ -260,7 +271,7 @@ def main() -> int:
                 }
                 logging.info("Modo offline ativado: relatório gerado sem IA.")
             else:
-                data = _call_ollama(prompt, args.model, args.ollama_url)
+                data = _call_ollama(prompt, args.model, args.ollama_url, args.ollama_timeout)
 
         if args.override_json:
             override_data = _load_data_json(args.override_json)

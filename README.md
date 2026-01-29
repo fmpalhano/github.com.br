@@ -81,6 +81,9 @@ o relatório é gerado sem chamada à IA e a descrição informada é usada como
 Com o Ollama instalado e em execução, informe o modelo desejado (ex.: `llama3.1`).
 O servidor deve estar ativo em `http://localhost:11434` ou na URL indicada.
 
+Se o modelo demorar para responder, ajuste o **tempo de espera** na interface ou use
+`OLLAMA_TIMEOUT` (em segundos) para aumentar o limite.
+
 ### Atalho no Windows
 
 Se preferir, execute o arquivo `run_ui.bat` para iniciar o servidor automaticamente.
