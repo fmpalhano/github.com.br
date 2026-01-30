@@ -98,37 +98,52 @@ def _call_ollama(prompt: str, model: str, base_url: str, timeout_s: int) -> dict
         "Cada item de imagens_relatorio e imagens_kpi deve ter: caminho e legenda. "
         "Se algum dado não existir, use string vazia ou listas vazias."
     )
-    payload = json.dumps(
-        {
-            "model": model,
-            "messages": [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": prompt},
-            ],
-            "stream": False,
-        }
-    ).encode("utf-8")
     endpoint = base_url.rstrip("/") + "/api/chat"
     logging.info("Conectando ao Ollama (%s) com o modelo %s.", endpoint, model)
-    req = urlrequest.Request(
-        endpoint,
-        data=payload,
-        headers={"Content-Type": "application/json"},
-    )
-    try:
-        with urlrequest.urlopen(req, timeout=timeout_s) as response:
-            body = response.read().decode("utf-8")
-    except TimeoutError as exc:
-        logging.error("O Ollama demorou para responder.")
-        raise RuntimeError(
-            "O Ollama demorou para responder. Tente novamente ou aumente o tempo de espera."
-        ) from exc
-    except Exception as exc:  # noqa: BLE001
+    models_to_try = [model]
+    cleaned_model = model.replace(" ", "-")
+    if cleaned_model not in models_to_try:
+        models_to_try.append(cleaned_model)
+
+    body = None
+    last_error = None
+    for candidate_model in models_to_try:
+        payload = json.dumps(
+            {
+                "model": candidate_model,
+                "messages": [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": prompt},
+                ],
+                "stream": False,
+            }
+        ).encode("utf-8")
+        req = urlrequest.Request(
+            endpoint,
+            data=payload,
+            headers={"Content-Type": "application/json"},
+        )
+        try:
+            with urlrequest.urlopen(req, timeout=timeout_s) as response:
+                body = response.read().decode("utf-8")
+                break
+        except TimeoutError as exc:
+            logging.error("O Ollama demorou para responder.")
+            raise RuntimeError(
+                "O Ollama demorou para responder. Tente novamente ou aumente o tempo de espera."
+            ) from exc
+        except Exception as exc:  # noqa: BLE001
+            last_error = exc
+            if candidate_model != model:
+                logging.error("Falha ao usar o modelo %s.", candidate_model)
+            continue
+
+    if body is None:
         logging.error("Não foi possível falar com o Ollama.")
         raise RuntimeError(
             "Não foi possível acessar o Ollama. Verifique se o serviço está ativo "
             "em http://localhost:11434 e se o modelo está instalado."
-        ) from exc
+        ) from last_error
 
     data = json.loads(body)
     content = data.get("message", {}).get("content", "")
