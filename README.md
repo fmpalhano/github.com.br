@@ -11,6 +11,7 @@ Template inicial para relatório de obra em formato DOCX, usando placeholders pa
 - `run_ui.bat`: atalho Windows para subir a interface localmente.
 - `app_server.py`: servidor local que executa o relatório ao clicar no botão.
 - `build_windows_installer.bat`: gera um executável Windows para rodar sem Python.
+- `generate_curve_s.py`: gera gráfico de Curva S em PNG a partir de dados JSON.
 
 ## Como gerar com IA local (Ollama)
 
@@ -109,3 +110,21 @@ pandoc relatorio.md -o relatorio.docx
 ```
 
 4. Abra o `relatorio.docx` e valide se o conteúdo e a formatação batem com o esperado.
+
+## Gráficos (Curva S)
+
+Para gerar uma Curva S em imagem (PNG) com seus dados:
+
+```bash
+python generate_curve_s.py --data-json curva_s.json --output curva_s.png
+```
+
+Exemplo de `curva_s.json`:
+
+```json
+[
+  {"label": "Jan", "planejado": 10, "realizado": 8},
+  {"label": "Fev", "planejado": 25, "realizado": 22},
+  {"label": "Mar", "planejado": 40, "realizado": 38}
+]
+```
