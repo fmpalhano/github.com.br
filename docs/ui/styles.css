@@ -223,6 +223,23 @@ textarea {
   color: var(--text);
 }
 
+.preview-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.preview-content {
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 16px;
+  background: #ffffff;
+  min-height: 240px;
+  font-family: Arial, sans-serif;
+  color: var(--text);
+}
+
 footer {
   text-align: center;
   padding: 24px 0 48px;

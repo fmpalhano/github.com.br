@@ -12,6 +12,7 @@ Template inicial para relatório de obra em formato DOCX, usando placeholders pa
 - `app_server.py`: servidor local que executa o relatório ao clicar no botão.
 - `build_windows_installer.bat`: gera um executável Windows para rodar sem Python.
 - `generate_curve_s.py`: gera gráfico de Curva S em PNG a partir de dados JSON.
+- O relatório DOCX é gerado com fonte padrão Arial via modelo de referência.
 
 ## Como gerar com IA local (Ollama)
 
@@ -110,6 +111,11 @@ pandoc relatorio.md -o relatorio.docx
 ```
 
 4. Abra o `relatorio.docx` e valide se o conteúdo e a formatação batem com o esperado.
+
+## Visualização do relatório
+
+Após gerar o relatório, a interface exibe uma **prévia** na tela com a fonte Arial.
+Se precisar atualizar manualmente, use o botão **Atualizar prévia**.
 
 ## Gráficos (Curva S)
 

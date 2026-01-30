@@ -12,6 +12,7 @@ from pathlib import Path
 from urllib import request as urlrequest
 
 import pystache
+from docx import Document
 
 
 class LogCounter(logging.Handler):
@@ -167,11 +168,30 @@ def _convert_to_docx(markdown_path: Path, docx_path: Path) -> bool:
     if not shutil.which("pandoc"):
         logging.warning("Pandoc não encontrado. O relatório DOCX não será gerado.")
         return False
+    reference_doc = markdown_path.parent / "reference.docx"
+    _ensure_reference_docx(reference_doc)
     subprocess.run(
-        ["pandoc", str(markdown_path), "-o", str(docx_path)],
+        [
+            "pandoc",
+            str(markdown_path),
+            "-o",
+            str(docx_path),
+            "--reference-doc",
+            str(reference_doc),
+        ],
         check=True,
     )
     return True
+
+
+def _ensure_reference_docx(path: Path) -> None:
+    if path.exists():
+        return
+    document = Document()
+    style = document.styles["Normal"]
+    style.font.name = "Arial"
+    document.add_paragraph("Modelo de referência - Arial")
+    document.save(path)
 
 
 def build_parser() -> argparse.ArgumentParser:

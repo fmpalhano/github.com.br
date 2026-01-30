@@ -11,6 +11,8 @@ const statusOutput = document.getElementById("status");
 const logOutput = document.getElementById("log");
 const runButton = document.getElementById("run-report");
 const resetButton = document.getElementById("reset-form");
+const refreshPreviewButton = document.getElementById("refresh-preview");
+const previewContainer = document.getElementById("preview");
 const reportImagesInput = document.getElementById("images-report");
 const kpiImagesInput = document.getElementById("images-kpi");
 const dwgInput = document.getElementById("dwg");
@@ -38,6 +40,20 @@ const updateStatus = (text, isError = false) => {
   statusOutput.style.background = isError
     ? "rgba(248, 113, 113, 0.1)"
     : "rgba(79, 209, 197, 0.08)";
+};
+
+const updatePreview = async () => {
+  try {
+    const response = await fetch(`/api/preview?path=${encodeURIComponent(outputInput.value)}`);
+    const data = await response.json();
+    if (!response.ok) {
+      previewContainer.textContent = data.error || "Prévia indisponível.";
+      return;
+    }
+    previewContainer.innerHTML = data.html;
+  } catch (error) {
+    previewContainer.textContent = "Erro ao carregar a prévia.";
+  }
 };
 
 runButton.addEventListener("click", async () => {
@@ -70,11 +86,16 @@ runButton.addEventListener("click", async () => {
       !success
     );
     logOutput.textContent = [data.stdout, data.stderr].filter(Boolean).join("\n");
+    if (success) {
+      await updatePreview();
+    }
   } catch (error) {
     updateStatus("Erro ao conectar com o servidor local.", true);
     logOutput.textContent = String(error);
   }
 });
+
+refreshPreviewButton.addEventListener("click", updatePreview);
 
 resetButton.addEventListener("click", () => {
   promptInput.value = "";
@@ -91,6 +112,7 @@ resetButton.addEventListener("click", () => {
   dwgInput.value = "";
   updateStatus("Aguardando envio.");
   logOutput.textContent = "";
+  previewContainer.textContent = "A prévia aparecerá aqui.";
 });
 
 promptInput.value = defaultPrompt;

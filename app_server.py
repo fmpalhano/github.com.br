@@ -8,10 +8,12 @@ from pathlib import Path
 import json
 
 from flask import Flask, jsonify, request, send_from_directory
+from markdown import markdown
 from werkzeug.utils import secure_filename
 
 app = Flask(__name__, static_folder="docs/ui")
 UPLOADS_DIR = Path("uploads")
+BASE_DIR = Path.cwd().resolve()
 
 
 @app.get("/")
@@ -104,6 +106,19 @@ def generate_report() -> object:
 
     status = 200 if result.returncode == 0 else 500
     return jsonify(response), status
+
+
+@app.get("/api/preview")
+def preview_report() -> object:
+    target = request.args.get("path", "relatorio.md")
+    path = (BASE_DIR / target).resolve()
+    if path.suffix.lower() != ".md" or BASE_DIR not in path.parents:
+        return jsonify({"error": "Arquivo inválido para prévia."}), 400
+    if not path.exists():
+        return jsonify({"error": "Arquivo não encontrado."}), 404
+    content = path.read_text(encoding="utf-8")
+    html = markdown(content)
+    return jsonify({"html": html})
 
 
 if __name__ == "__main__":
