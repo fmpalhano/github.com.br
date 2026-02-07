@@ -1,0 +1,119 @@
+const promptInput = document.getElementById("prompt");
+const modelInput = document.getElementById("model");
+const ollamaUrlInput = document.getElementById("ollama-url");
+const ollamaTimeoutInput = document.getElementById("ollama-timeout");
+const outputInput = document.getElementById("output");
+const jsonInput = document.getElementById("json");
+const convertToggle = document.getElementById("convert");
+const logToggle = document.getElementById("log-file");
+const offlineToggle = document.getElementById("offline");
+const statusOutput = document.getElementById("status");
+const logOutput = document.getElementById("log");
+const runButton = document.getElementById("run-report");
+const resetButton = document.getElementById("reset-form");
+const refreshPreviewButton = document.getElementById("refresh-preview");
+const previewContainer = document.getElementById("preview");
+const reportImagesInput = document.getElementById("images-report");
+const kpiImagesInput = document.getElementById("images-kpi");
+const dwgInput = document.getElementById("dwg");
+
+const defaultPrompt =
+  "Relatório de obra com extensão MT, status PEP, execução e registros fotográficos.";
+
+const buildPayload = () => ({
+  prompt: promptInput.value || defaultPrompt,
+  model: modelInput.value || "deepseek v3.1:671b-cloud",
+  ollama_url: ollamaUrlInput.value || "http://localhost:11434",
+  ollama_timeout: ollamaTimeoutInput.value || "180",
+  output_md: outputInput.value || "relatorio.md",
+  output_json: jsonInput.value || "",
+  convert_docx: convertToggle.checked,
+  log_file: logToggle.checked ? "relatorio.log" : "",
+  offline: offlineToggle.checked,
+});
+
+const updateStatus = (text, isError = false) => {
+  statusOutput.textContent = text;
+  statusOutput.style.borderColor = isError
+    ? "rgba(248, 113, 113, 0.4)"
+    : "rgba(79, 209, 197, 0.25)";
+  statusOutput.style.background = isError
+    ? "rgba(248, 113, 113, 0.1)"
+    : "rgba(79, 209, 197, 0.08)";
+};
+
+const updatePreview = async () => {
+  try {
+    const response = await fetch(`/api/preview?path=${encodeURIComponent(outputInput.value)}`);
+    const data = await response.json();
+    if (!response.ok) {
+      previewContainer.textContent = data.error || "Prévia indisponível.";
+      return;
+    }
+    previewContainer.innerHTML = data.html;
+  } catch (error) {
+    previewContainer.textContent = "Erro ao carregar a prévia.";
+  }
+};
+
+runButton.addEventListener("click", async () => {
+  updateStatus("Processando relatório...");
+  logOutput.textContent = "";
+
+  try {
+    const payload = buildPayload();
+    const formData = new FormData();
+    Object.entries(payload).forEach(([key, value]) => formData.append(key, value));
+
+    Array.from(reportImagesInput.files).forEach((file) =>
+      formData.append("imagens_relatorio", file)
+    );
+    Array.from(kpiImagesInput.files).forEach((file) =>
+      formData.append("imagens_kpi", file)
+    );
+    if (dwgInput.files[0]) {
+      formData.append("dwg_arquivo", dwgInput.files[0]);
+    }
+
+    const response = await fetch("/api/generate", {
+      method: "POST",
+      body: formData,
+    });
+    const data = await response.json();
+    const success = response.ok && data.returncode === 0;
+    updateStatus(
+      success ? "Relatório gerado com sucesso." : "Falha ao gerar relatório.",
+      !success
+    );
+    logOutput.textContent = [data.stdout, data.stderr].filter(Boolean).join("\n");
+    if (success) {
+      await updatePreview();
+    }
+  } catch (error) {
+    updateStatus("Erro ao conectar com o servidor local.", true);
+    logOutput.textContent = String(error);
+  }
+});
+
+refreshPreviewButton.addEventListener("click", updatePreview);
+
+resetButton.addEventListener("click", () => {
+  promptInput.value = "";
+  modelInput.value = "deepseek v3.1:671b-cloud";
+  ollamaUrlInput.value = "http://localhost:11434";
+  ollamaTimeoutInput.value = "180";
+  outputInput.value = "relatorio.md";
+  jsonInput.value = "relatorio.json";
+  convertToggle.checked = true;
+  logToggle.checked = true;
+  offlineToggle.checked = false;
+  reportImagesInput.value = "";
+  kpiImagesInput.value = "";
+  dwgInput.value = "";
+  updateStatus("Aguardando envio.");
+  logOutput.textContent = "";
+  previewContainer.textContent = "A prévia aparecerá aqui.";
+});
+
+promptInput.value = defaultPrompt;
+updateStatus("Aguardando envio.");

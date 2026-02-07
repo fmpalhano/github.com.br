@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Grupo Setup | Gerador de Relatórios de Obra</title>
+    <link rel="stylesheet" href="styles.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+  </head>
+  <body>
+    <div class="background-glow"></div>
+    <header class="hero">
+      <nav class="nav">
+        <div class="brand">
+          <span class="brand-mark">GS</span>
+          <div>
+            <p class="brand-title">Grupo Setup</p>
+            <p class="brand-subtitle">Relatórios & KPI</p>
+          </div>
+        </div>
+        <div class="nav-links">
+          <a href="#">Quem somos</a>
+          <a href="#">Especialidades</a>
+          <a href="#">Central de atendimento</a>
+          <a href="#">Área do Cliente</a>
+        </div>
+      </nav>
+      <div class="hero-content">
+        <h1>Feita de gente, a serviço das pessoas.</h1>
+        <p>
+          Plataforma 2026 para relatórios técnicos A4 e KPI com IA, imagens e anexos
+          padronizados para o Grupo Setup.
+        </p>
+        <div class="hero-actions">
+          <button class="primary" id="run-report">Gerar relatório</button>
+          <button class="secondary" id="reset-form">Limpar formulário</button>
+        </div>
+      </div>
+    </header>
+
+    <main class="content">
+      <section class="card">
+        <h2>Descrição da obra</h2>
+        <p>Descreva a obra de forma objetiva para a extração dos campos.</p>
+        <textarea
+          id="prompt"
+          placeholder="Ex.: Relatório da obra com extensão MT, status PEP e registros fotográficos..."
+        ></textarea>
+      </section>
+
+      <section class="grid">
+        <div class="card">
+          <h2>Configurações</h2>
+          <div class="field">
+            <label for="model">Modelo</label>
+            <input id="model" type="text" value="deepseek v3.1:671b-cloud" />
+          </div>
+          <div class="field">
+            <label for="ollama-url">URL do Ollama</label>
+            <input id="ollama-url" type="text" value="http://localhost:11434" />
+          </div>
+          <div class="field">
+            <label for="ollama-timeout">Tempo de espera (segundos)</label>
+            <input id="ollama-timeout" type="number" min="30" value="180" />
+          </div>
+          <div class="field">
+            <label for="output">Arquivo de saída (Markdown)</label>
+            <input id="output" type="text" value="relatorio.md" />
+          </div>
+          <div class="field">
+            <label for="json">Salvar JSON</label>
+            <input id="json" type="text" value="relatorio.json" />
+          </div>
+          <div class="toggles">
+            <label class="toggle">
+              <input type="checkbox" id="convert" checked />
+              <span>Converter para DOCX</span>
+            </label>
+            <label class="toggle">
+              <input type="checkbox" id="log-file" checked />
+              <span>Salvar logs em arquivo</span>
+            </label>
+            <label class="toggle">
+              <input type="checkbox" id="offline" />
+              <span>Modo offline (sem IA / gratuito)</span>
+            </label>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>Arquivos e anexos</h2>
+          <p>Adicione imagens e arquivos DWG para o relatório e KPI.</p>
+          <div class="field">
+            <label for="images-report">Imagens do relatório</label>
+            <input id="images-report" type="file" multiple />
+          </div>
+          <div class="field">
+            <label for="images-kpi">Imagens de KPI</label>
+            <input id="images-kpi" type="file" multiple />
+          </div>
+          <div class="field">
+            <label for="dwg">Arquivo DWG</label>
+            <input id="dwg" type="file" accept=".dwg" />
+          </div>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Resumo da execução</h2>
+        <p>Confira o status, logs e mensagens da geração.</p>
+        <div class="status" id="status">Aguardando envio.</div>
+        <pre id="log" class="command"></pre>
+      </section>
+
+      <section class="card preview">
+        <div class="preview-header">
+          <h2>Prévia do relatório</h2>
+          <button class="secondary" id="refresh-preview">Atualizar prévia</button>
+        </div>
+        <div id="preview" class="preview-content">A prévia aparecerá aqui.</div>
+      </section>
+    </main>
+
+    <footer>
+      <p>Grupo Setup © 2026 • Felipe de Moraes Palhano</p>
+    </footer>
+
+    <script src="app.js"></script>
+  </body>
+</html>
