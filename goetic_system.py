@@ -31,7 +31,7 @@ class SystemConfig:
 
     # Integração opcional com API local Ollama (DeepSeek).
     ENABLE_LLM = os.getenv("GOETIA_ENABLE_LLM", "1") == "1"
-    OLLAMA_URL = os.getenv("GOETIA_OLLAMA_URL", "http://127.0.0.1:11434/api/generate")
+    OLLAMA_URL = os.getenv("GOETIA_OLLAMA_URL", "http://127.0.0.1:11434")
     OLLAMA_MODEL = os.getenv("GOETIA_MODEL", "deepseek-r1:8b")
     OLLAMA_TIMEOUT_S = int(os.getenv("GOETIA_OLLAMA_TIMEOUT", "45"))
     OLLAMA_HEALTH_URL = os.getenv("GOETIA_OLLAMA_HEALTH_URL", "http://127.0.0.1:11434/api/tags")
@@ -438,16 +438,31 @@ class GoeticChatSystem:
         if host in {"127.0.0.1", "localhost"}:
             return (
                 "Se o app roda em container/WSL e o Ollama no host Windows, "
-                "troque GOETIA_OLLAMA_URL para http://host.docker.internal:11434/api/generate"
+                "troque GOETIA_OLLAMA_URL para http://host.docker.internal:11434"
             )
         return ""
+
+    def _resolve_ollama_endpoint(self, api_path: str) -> str:
+        base = SystemConfig.OLLAMA_URL.rstrip("/")
+        if "/api/" in base:
+            base = base.split("/api/", 1)[0]
+        return f"{base}{api_path}"
+
+    def _model_candidates(self) -> List[str]:
+        primary = SystemConfig.OLLAMA_MODEL.strip()
+        candidates = [primary]
+        cleaned = primary.replace(" ", "-")
+        if cleaned and cleaned not in candidates:
+            candidates.append(cleaned)
+        return candidates
 
     def _ollama_available(self) -> bool:
         if not SystemConfig.ENABLE_LLM:
             self.last_llm_error = "LLM desabilitado por configuração"
             return False
 
-        req = request.Request(SystemConfig.OLLAMA_HEALTH_URL, method="GET")
+        health_url = SystemConfig.OLLAMA_HEALTH_URL or self._resolve_ollama_endpoint("/api/tags")
+        req = request.Request(health_url, method="GET")
         try:
             with request.urlopen(req, timeout=min(6, SystemConfig.OLLAMA_TIMEOUT_S)) as resp:
                 if resp.status < 400:
@@ -469,44 +484,57 @@ class GoeticChatSystem:
             return None
 
         prompt_pack = self.demon_personality.build_prompt(demon_name, user_message)
-        payload = {
-            "model": SystemConfig.OLLAMA_MODEL,
-            "prompt": f"[SYSTEM] {prompt_pack['system']}\n[USER] {prompt_pack['user']}\n[ASSISTANT]",
-            "stream": False,
-            "options": {"temperature": 0.8, "top_p": 0.9},
-        }
+        endpoint = self._resolve_ollama_endpoint("/api/chat")
 
-        data = json.dumps(payload).encode("utf-8")
         self.llm_request_count += 1
         self._log_llm(
-            f"REQ#{self.llm_request_count} model={SystemConfig.OLLAMA_MODEL} url={SystemConfig.OLLAMA_URL} demon={demon_name} msg={user_message[:80]!r}"
+            f"REQ#{self.llm_request_count} endpoint={endpoint} model={SystemConfig.OLLAMA_MODEL} demon={demon_name} msg={user_message[:80]!r}"
         )
-        req = request.Request(
-            SystemConfig.OLLAMA_URL,
-            data=data,
-            headers={"Content-Type": "application/json"},
-            method="POST",
-        )
-        try:
-            with request.urlopen(req, timeout=SystemConfig.OLLAMA_TIMEOUT_S) as resp:
-                parsed = json.loads(resp.read().decode("utf-8"))
-                text = (parsed.get("response") or "").strip()
-                if text:
-                    self.last_llm_error = "nenhum"
-                    self._log_llm(f"RES#{self.llm_request_count} ok chars={len(text)}")
-                    return text
-                self.last_llm_error = "resposta vazia da API"
-                self._log_llm(f"RES#{self.llm_request_count} vazia")
-                return None
-        except error.HTTPError as exc:
-            detail = exc.read().decode("utf-8", errors="ignore").strip()
-            self.last_llm_error = f"HTTP {exc.code}: {detail[:200]}"
-            self._log_llm(f"ERR#{self.llm_request_count} {self.last_llm_error}")
-            return None
-        except Exception as exc:
-            self.last_llm_error = str(exc)
-            self._log_llm(f"ERR#{self.llm_request_count} {self.last_llm_error}")
-            return None
+
+        last_error = "falha desconhecida"
+        for candidate_model in self._model_candidates():
+            payload = {
+                "model": candidate_model,
+                "messages": [
+                    {"role": "system", "content": prompt_pack["system"]},
+                    {"role": "user", "content": prompt_pack["user"]},
+                ],
+                "stream": False,
+                "options": {"temperature": 0.8, "top_p": 0.9},
+            }
+
+            data = json.dumps(payload).encode("utf-8")
+            req = request.Request(
+                endpoint,
+                data=data,
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            try:
+                with request.urlopen(req, timeout=SystemConfig.OLLAMA_TIMEOUT_S) as resp:
+                    parsed = json.loads(resp.read().decode("utf-8"))
+                    text = (parsed.get("message", {}).get("content", "") or "").strip()
+                    if text:
+                        self.last_llm_error = "nenhum"
+                        self._log_llm(
+                            f"RES#{self.llm_request_count} ok model={candidate_model} chars={len(text)}"
+                        )
+                        return text
+                    last_error = f"resposta vazia com modelo {candidate_model}"
+                    self._log_llm(f"RES#{self.llm_request_count} vazia model={candidate_model}")
+            except error.HTTPError as exc:
+                detail = exc.read().decode("utf-8", errors="ignore").strip()
+                last_error = f"HTTP {exc.code} em {candidate_model}: {detail[:200]}"
+                self._log_llm(f"ERR#{self.llm_request_count} {last_error}")
+            except TimeoutError:
+                last_error = f"timeout ao chamar {candidate_model}"
+                self._log_llm(f"ERR#{self.llm_request_count} {last_error}")
+            except Exception as exc:
+                last_error = f"{type(exc).__name__} em {candidate_model}: {exc}"
+                self._log_llm(f"ERR#{self.llm_request_count} {last_error}")
+
+        self.last_llm_error = last_error
+        return None
 
     def generate_response(self, demon_name: str, message: str) -> str:
         llm_text = self._query_ollama(demon_name, message)
