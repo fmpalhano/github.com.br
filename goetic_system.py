@@ -404,7 +404,9 @@ class GoeticChatSystem:
         self.last_response_source = "fallback"
         self.llm_request_count = 0
         self.last_llm_error = "nenhum"
+        self.active_model = SystemConfig.OLLAMA_MODEL
         self._load_session()
+        self._auto_select_model()
 
     def _serialize(self) -> Dict[str, Any]:
         return {
@@ -449,11 +451,17 @@ class GoeticChatSystem:
         return f"{base}{api_path}"
 
     def _model_candidates(self) -> List[str]:
-        primary = SystemConfig.OLLAMA_MODEL.strip()
+        primary = (self.active_model or SystemConfig.OLLAMA_MODEL).strip()
         candidates = [primary]
         cleaned = primary.replace(" ", "-")
         if cleaned and cleaned not in candidates:
             candidates.append(cleaned)
+        cfg = SystemConfig.OLLAMA_MODEL.strip()
+        if cfg and cfg not in candidates:
+            candidates.append(cfg)
+        cfg_clean = cfg.replace(" ", "-")
+        if cfg_clean and cfg_clean not in candidates:
+            candidates.append(cfg_clean)
         return candidates
 
     def _list_ollama_models(self) -> List[str]:
@@ -481,6 +489,43 @@ class GoeticChatSystem:
         if deepseek:
             return deepseek[0], installed
         return installed[0], installed
+
+    def _auto_select_model(self) -> None:
+        if not SystemConfig.ENABLE_LLM:
+            return
+        installed = self._list_ollama_models()
+        if not installed:
+            return
+        candidates = self._model_candidates()
+        for c in candidates:
+            if c in installed:
+                self.active_model = c
+                return
+        best, _ = self._best_installed_model_fallback()
+        if best:
+            self.active_model = best
+
+    def list_models(self):
+        print("[MODELS] Modelos locais detectados no Ollama:")
+        installed = self._list_ollama_models()
+        if not installed:
+            print("- Nenhum detectado (ou falha em /api/tags)")
+            return
+        for m in installed:
+            marker = "*" if m == self.active_model else " "
+            print(f"{marker} {m}")
+
+    def set_model(self, model_name: str):
+        model_name = model_name.strip()
+        if not model_name:
+            self.terminal.print_error("Informe o nome do modelo.")
+            return
+        installed = self._list_ollama_models()
+        if installed and model_name not in installed:
+            self.terminal.print_error("Modelo não encontrado localmente. Use MODELS para listar.")
+            return
+        self.active_model = model_name
+        print(f"Modelo ativo definido para: {self.active_model}")
 
     def _ollama_available(self) -> bool:
         if not SystemConfig.ENABLE_LLM:
@@ -514,7 +559,7 @@ class GoeticChatSystem:
 
         self.llm_request_count += 1
         self._log_llm(
-            f"REQ#{self.llm_request_count} endpoint={endpoint} model={SystemConfig.OLLAMA_MODEL} demon={demon_name} msg={user_message[:80]!r}"
+            f"REQ#{self.llm_request_count} endpoint={endpoint} model={self.active_model} demon={demon_name} msg={user_message[:80]!r}"
         )
 
         last_error = "falha desconhecida"
@@ -602,7 +647,7 @@ class GoeticChatSystem:
             installed_msg = ", ".join(installed[:10]) if installed else "nenhum listado em /api/tags"
             last_error = (
                 f"modelo não encontrado ({', '.join(seen_not_found)}). Modelos instalados: {installed_msg}. "
-                f"Use: ollama pull {SystemConfig.OLLAMA_MODEL}"
+                f"Use: ollama pull {self.active_model}"
             )
 
         self.last_llm_error = last_error
@@ -674,13 +719,17 @@ class GoeticChatSystem:
                 self.health_check()
             elif upper == "PINGLLM":
                 self.ping_llm()
+            elif upper == "MODELS":
+                self.list_models()
+            elif upper.startswith("SETMODEL "):
+                self.set_model(cmd.split(maxsplit=1)[1])
             else:
                 self.terminal.print_error("Comando inválido. Digite HELP.")
 
     def show_help(self):
         print(
             "\nComandos: LIST | PROFILE <nome> | INVOKE <nome> | ASK <mensagem> | RITUAL | CHAT | MULTI | GRIMOIRE | REFERENCES | "
-            "HISTORY | SAVE | LOAD | CLEAR | MODEL | HEALTH | PINGLLM | HELP | QUIT"
+            "HISTORY | SAVE | LOAD | CLEAR | MODEL | MODELS | SETMODEL <nome> | HEALTH | PINGLLM | HELP | QUIT"
         )
 
     def ask_once(self, message: str):
@@ -731,7 +780,8 @@ class GoeticChatSystem:
         api_online = self._ollama_available()
         print(f"LLM (config): {state}")
         print(f"API Ollama (conectividade): {'ONLINE' if api_online else 'OFFLINE'}")
-        print(f"Modelo: {SystemConfig.OLLAMA_MODEL}")
+        print(f"Modelo ativo: {self.active_model}")
+        print(f"Modelo configurado (default): {SystemConfig.OLLAMA_MODEL}")
         print(f"Endpoint: {SystemConfig.OLLAMA_URL}")
         print(f"Última fonte de resposta: {self.last_response_source}")
         print(f"Tentativas de request LLM nesta execução: {self.llm_request_count}")
