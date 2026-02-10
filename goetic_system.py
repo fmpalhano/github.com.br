@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from hashlib import sha1
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 
 @dataclass(frozen=True)
@@ -456,6 +456,32 @@ class GoeticChatSystem:
             candidates.append(cleaned)
         return candidates
 
+    def _list_ollama_models(self) -> List[str]:
+        tags_url = self._resolve_ollama_endpoint("/api/tags")
+        req = request.Request(tags_url, method="GET")
+        try:
+            with request.urlopen(req, timeout=min(10, SystemConfig.OLLAMA_TIMEOUT_S)) as resp:
+                payload = json.loads(resp.read().decode("utf-8"))
+        except Exception:
+            return []
+
+        names: List[str] = []
+        for item in payload.get("models", []) or []:
+            name = (item.get("name") or "").strip()
+            if name:
+                names.append(name)
+        return names
+
+    def _best_installed_model_fallback(self) -> Tuple[Optional[str], List[str]]:
+        installed = self._list_ollama_models()
+        if not installed:
+            return None, []
+
+        deepseek = [m for m in installed if "deepseek" in m.lower()]
+        if deepseek:
+            return deepseek[0], installed
+        return installed[0], installed
+
     def _ollama_available(self) -> bool:
         if not SystemConfig.ENABLE_LLM:
             self.last_llm_error = "LLM desabilitado por configuração"
@@ -492,7 +518,9 @@ class GoeticChatSystem:
         )
 
         last_error = "falha desconhecida"
-        for candidate_model in self._model_candidates():
+        candidates = self._model_candidates()
+        seen_not_found: List[str] = []
+        for candidate_model in candidates:
             payload = {
                 "model": candidate_model,
                 "messages": [
@@ -524,6 +552,9 @@ class GoeticChatSystem:
                     self._log_llm(f"RES#{self.llm_request_count} vazia model={candidate_model}")
             except error.HTTPError as exc:
                 detail = exc.read().decode("utf-8", errors="ignore").strip()
+                detail_lower = detail.lower()
+                if exc.code == 404 and "not found" in detail_lower and "model" in detail_lower:
+                    seen_not_found.append(candidate_model)
                 last_error = f"HTTP {exc.code} em {candidate_model}: {detail[:200]}"
                 self._log_llm(f"ERR#{self.llm_request_count} {last_error}")
             except TimeoutError:
@@ -532,6 +563,47 @@ class GoeticChatSystem:
             except Exception as exc:
                 last_error = f"{type(exc).__name__} em {candidate_model}: {exc}"
                 self._log_llm(f"ERR#{self.llm_request_count} {last_error}")
+
+        fallback_model, installed = self._best_installed_model_fallback()
+        if fallback_model and seen_not_found:
+            payload = {
+                "model": fallback_model,
+                "messages": [
+                    {"role": "system", "content": prompt_pack["system"]},
+                    {"role": "user", "content": prompt_pack["user"]},
+                ],
+                "stream": False,
+                "options": {"temperature": 0.8, "top_p": 0.9},
+            }
+            data = json.dumps(payload).encode("utf-8")
+            req = request.Request(
+                endpoint,
+                data=data,
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            try:
+                with request.urlopen(req, timeout=SystemConfig.OLLAMA_TIMEOUT_S) as resp:
+                    parsed = json.loads(resp.read().decode("utf-8"))
+                    text = (parsed.get("message", {}).get("content", "") or "").strip()
+                    if text:
+                        self.last_llm_error = (
+                            f"modelo configurado não instalado ({', '.join(seen_not_found)}); usando fallback automático: {fallback_model}"
+                        )
+                        self._log_llm(
+                            f"RES#{self.llm_request_count} fallback_model={fallback_model} chars={len(text)}"
+                        )
+                        return text
+            except Exception as exc:
+                last_error = f"fallback {fallback_model} falhou: {exc}"
+                self._log_llm(f"ERR#{self.llm_request_count} {last_error}")
+
+        if seen_not_found:
+            installed_msg = ", ".join(installed[:10]) if installed else "nenhum listado em /api/tags"
+            last_error = (
+                f"modelo não encontrado ({', '.join(seen_not_found)}). Modelos instalados: {installed_msg}. "
+                f"Use: ollama pull {SystemConfig.OLLAMA_MODEL}"
+            )
 
         self.last_llm_error = last_error
         return None
@@ -690,6 +762,11 @@ class GoeticChatSystem:
         else:
             print("- Resultado: FALHA na chamada do modelo")
             print(f"- Erro: {self.last_llm_error}")
+            installed = self._list_ollama_models()
+            if installed:
+                print(f"- Modelos instalados detectados: {', '.join(installed[:8])}")
+            else:
+                print("- Modelos instalados detectados: nenhum (ou falha em /api/tags)")
             hint = self._endpoint_hint()
             if hint:
                 print(f"- Dica: {hint}")
