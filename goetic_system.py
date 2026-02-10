@@ -32,8 +32,8 @@ class SystemConfig:
     # Integração opcional com API local Ollama (DeepSeek).
     ENABLE_LLM = os.getenv("GOETIA_ENABLE_LLM", "1") == "1"
     OLLAMA_URL = os.getenv("GOETIA_OLLAMA_URL", "http://127.0.0.1:11434")
-    OLLAMA_MODEL = os.getenv("GOETIA_MODEL", "deepseek-r1:8b")
-    OLLAMA_TIMEOUT_S = int(os.getenv("GOETIA_OLLAMA_TIMEOUT", "45"))
+    OLLAMA_MODEL = os.getenv("GOETIA_MODEL", "deepseek v3:1671b-cloud")
+    OLLAMA_TIMEOUT_S = int(os.getenv("GOETIA_OLLAMA_TIMEOUT", "180"))
     OLLAMA_HEALTH_URL = os.getenv("GOETIA_OLLAMA_HEALTH_URL", "http://127.0.0.1:11434/api/tags")
     LLM_DEBUG_LOG = Path(os.getenv("GOETIA_LLM_LOG", "goetia_llm.log"))
 
