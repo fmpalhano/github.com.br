@@ -2,6 +2,7 @@ import json
 import os
 import random
 import time
+from urllib import error, request
 from dataclasses import dataclass
 from datetime import datetime
 from hashlib import sha1
@@ -19,13 +20,19 @@ class DemonRecord:
 
 
 class SystemConfig:
-    VERSION = "v2.1.0"
+    VERSION = "v2.2.0"
     DEMON_COUNT = 72
     GLITCH_CHANCE = 0.08
     TYPE_DELAY = 0.01
     ENABLE_COLORS = True
     ENABLE_BELL = True
     SESSION_FILE = Path("session_goetia.json")
+
+    # Integração opcional com API local Ollama (DeepSeek).
+    ENABLE_LLM = os.getenv("GOETIA_ENABLE_LLM", "1") == "1"
+    OLLAMA_URL = os.getenv("GOETIA_OLLAMA_URL", "http://127.0.0.1:11434/api/generate")
+    OLLAMA_MODEL = os.getenv("GOETIA_MODEL", "deepseek-r1:8b")
+    OLLAMA_TIMEOUT_S = int(os.getenv("GOETIA_OLLAMA_TIMEOUT", "45"))
 
 
 class GrimoireDatabase:
@@ -172,10 +179,27 @@ class GrimoireDatabase:
         return refs.get(key, key)
 
     def _procedural_sigil(self, name: str) -> str:
-        # Sigilo textual procedural para interação em terminal (não substitui selo histórico original).
-        digest = sha1(name.encode("utf-8")).hexdigest()[:36]
-        chunks = [digest[i:i + 6] for i in range(0, 36, 6)]
-        return "\n".join(f"  ⟐ {c[:3]}·{c[3:]} ⟡" for c in chunks)
+        # Sigilo textual procedural em grade (melhor legibilidade em terminais e .bat).
+        digest = sha1(name.encode("utf-8")).hexdigest()
+        bits = "".join(f"{int(ch, 16):04b}" for ch in digest[:16])
+        size = 9
+        canvas = [[" " for _ in range(size)] for _ in range(size)]
+
+        idx = 0
+        for y in range(size):
+            for x in range((size + 1) // 2):
+                on = bits[idx % len(bits)] == "1"
+                idx += 1
+                char = "✦" if on else "·"
+                canvas[y][x] = char
+                canvas[y][size - 1 - x] = char
+
+        lines = ["┌" + "─" * size + "┐"]
+        for row in canvas:
+            lines.append("│" + "".join(row) + "│")
+        lines.append("└" + "─" * size + "┘")
+        lines.append(f"⟮{name}⟯")
+        return "\n".join(lines)
 
     def _load_grimoire_texts(self) -> Dict[str, str]:
         return {
@@ -281,6 +305,36 @@ class RitualSystem:
 class DemonPersonality:
     def __init__(self, grimoire_db: GrimoireDatabase):
         self.db = grimoire_db
+        self.rank_voice = {
+            "Rei": "majestoso, imperativo, soberano",
+            "Duque": "diplomático, estratégico, aristocrático",
+            "Príncipe": "oracular, enigmático, elevado",
+            "Marquês": "bélico, cortante, tático",
+            "Conde": "calculista, reservado, observador",
+            "Presidente": "instrutivo, racional, técnico",
+            "Cavaleiro": "severo, disciplinado, direto",
+        }
+
+    def build_prompt(self, demon_name: str, user_message: str) -> Dict[str, str]:
+        demon = self.db.get_demon(demon_name)
+        if not demon:
+            return {
+                "system": "Você é um oráculo textual infernal da tradição goética.",
+                "user": user_message,
+            }
+
+        attrs = ", ".join(demon.get("attributes", [])[:4])
+        rank = demon.get("rank", "Entidade")
+        voice = self.rank_voice.get(rank.split("/")[0], "ritualístico e sombrio")
+        lore = demon.get("lore", "")
+        system_prompt = (
+            f"Você deve responder em português, em primeira pessoa como {demon_name}, "
+            f"ser infernal da Ars Goetia. Rank: {rank}. Voz: {voice}. "
+            f"Domínios: {attrs}. Lore: {lore}. "
+            "Mantenha tom ritualístico, coerente com tradição infernal, sem quebrar personagem. "
+            "Seja conciso (4-8 linhas), evocativo e objetivo."
+        )
+        return {"system": system_prompt, "user": user_message}
 
     def get_demon_response(self, demon_name: str, user_message: str) -> str:
         demon = self.db.get_demon(demon_name)
@@ -351,6 +405,39 @@ class GoeticChatSystem:
     def _save_session(self):
         SessionStore.save(SystemConfig.SESSION_FILE, self._serialize())
 
+    def _query_ollama(self, demon_name: str, user_message: str) -> Optional[str]:
+        if not SystemConfig.ENABLE_LLM:
+            return None
+
+        prompt_pack = self.demon_personality.build_prompt(demon_name, user_message)
+        payload = {
+            "model": SystemConfig.OLLAMA_MODEL,
+            "prompt": f"[SYSTEM] {prompt_pack['system']}\n[USER] {prompt_pack['user']}\n[ASSISTANT]",
+            "stream": False,
+            "options": {"temperature": 0.8, "top_p": 0.9},
+        }
+
+        data = json.dumps(payload).encode("utf-8")
+        req = request.Request(
+            SystemConfig.OLLAMA_URL,
+            data=data,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        try:
+            with request.urlopen(req, timeout=SystemConfig.OLLAMA_TIMEOUT_S) as resp:
+                parsed = json.loads(resp.read().decode("utf-8"))
+                text = (parsed.get("response") or "").strip()
+                return text or None
+        except (error.URLError, TimeoutError, json.JSONDecodeError, OSError):
+            return None
+
+    def generate_response(self, demon_name: str, message: str) -> str:
+        llm_text = self._query_ollama(demon_name, message)
+        if llm_text:
+            return llm_text
+        return self.demon_personality.get_demon_response(demon_name, message)
+
     def startup_sequence(self):
         self.terminal.clear_screen()
         self.terminal.print_banner()
@@ -403,13 +490,15 @@ class GoeticChatSystem:
             elif upper == "LOAD":
                 self._load_session()
                 self.terminal.typewriter_effect("Sessão carregada.")
+            elif upper == "MODEL":
+                self.show_model_status()
             else:
                 self.terminal.print_error("Comando inválido. Digite HELP.")
 
     def show_help(self):
         print(
             "\nComandos: LIST | PROFILE <nome> | INVOKE <nome> | ASK <mensagem> | RITUAL | CHAT | MULTI | GRIMOIRE | REFERENCES | "
-            "HISTORY | SAVE | LOAD | CLEAR | HELP | QUIT"
+            "HISTORY | SAVE | LOAD | CLEAR | MODEL | HELP | QUIT"
         )
 
     def ask_once(self, message: str):
@@ -422,7 +511,7 @@ class GoeticChatSystem:
         if not self.active_demon:
             self.active_demon = "PAIMON"
 
-        response = self.demon_personality.get_demon_response(self.active_demon, message)
+        response = self.generate_response(self.active_demon, message)
         print(f"{self.active_demon}: {response}")
         self.conversation_history.append(
             {
@@ -451,6 +540,16 @@ class GoeticChatSystem:
         print(f"Descrição: {demon.get('description', '')}")
         print(f"Lore: {demon.get('lore', '')}")
         print(f"Fonte: {demon.get('source', '')}")
+        print("Sigilo:")
+        print(demon.get("sigil", ""))
+
+
+    def show_model_status(self):
+        state = "ATIVO" if SystemConfig.ENABLE_LLM else "INATIVO"
+        print(f"LLM: {state}")
+        print(f"Modelo: {SystemConfig.OLLAMA_MODEL}")
+        print(f"Endpoint: {SystemConfig.OLLAMA_URL}")
+        print("Obs: requer Ollama/DeepSeek disponível localmente para respostas via API.")
 
     def show_references(self):
         self.terminal.print_blood_text("REFERÊNCIAS HISTÓRICAS")
@@ -519,7 +618,7 @@ class GoeticChatSystem:
             if not msg:
                 continue
 
-            response = self.demon_personality.get_demon_response(self.active_demon, msg)
+            response = self.generate_response(self.active_demon, msg)
             print(f"{self.active_demon}: {response}")
             self.conversation_history.append(
                 {
@@ -555,7 +654,7 @@ class GoeticChatSystem:
                 turn += 1
                 continue
 
-            response = self.demon_personality.get_demon_response(self.active_demon, msg)
+            response = self.generate_response(self.active_demon, msg)
             print(f"{self.active_demon} -> {player}: {response}")
             self.conversation_history.append(
                 {
