@@ -345,18 +345,32 @@ class DemonPersonality:
         rank = demon.get("rank", "Entidade")
         style = attrs[0] if attrs else "mistério"
         style2 = attrs[1] if len(attrs) > 1 else "sabedoria"
-        opening = random.choice(
-            [
-                "Escuto tua pergunta através do círculo.",
-                "As linhas do selo respondem ao teu chamado.",
-                "A consulta foi recebida no domínio ritual.",
-            ]
-        )
+
+        openings = [
+            "Escuto tua pergunta através do círculo.",
+            "As linhas do selo respondem ao teu chamado.",
+            "A consulta foi recebida no domínio ritual.",
+            "Teu verbo ecoou no triângulo da arte.",
+            "Sob o selo, tua intenção tornou-se audível.",
+        ]
+        closings = [
+            "Age com disciplina ritual e registra os sinais.",
+            "Não rompas o círculo sem concluir tua intenção.",
+            "Confirma o resultado por prática e observação.",
+            "Firme tua vontade e evita contradições no rito.",
+            "Sela a operação com clareza e silêncio.",
+        ]
+
+        idx = abs(hash(f"{demon_name}:{user_message.lower()}")) % len(openings)
+        cidx = abs(hash(f"{user_message.lower()}:{demon_name}")) % len(closings)
+        opening = openings[idx]
+        closing = closings[cidx]
+
         return (
             f"[{demon_name} | {rank}] {opening} "
             f"Sou tratado na tradição como entidade infernal, atuando em {style} e {style2}. "
             f"Sobre tua pergunta '{user_message}', respondo no enquadramento ritual. "
-            "Simulação textual para estudo de Chaos Magick/Tecno Magick com base em grimórios históricos."
+            f"{closing}"
         )
 
 
@@ -384,6 +398,7 @@ class GoeticChatSystem:
         self.active_demon: Optional[str] = None
         self.conversation_history: List[Dict[str, Any]] = []
         self.participants: List[str] = ["Operador"]
+        self.last_response_source = "fallback"
         self._load_session()
 
     def _serialize(self) -> Dict[str, Any]:
@@ -435,7 +450,9 @@ class GoeticChatSystem:
     def generate_response(self, demon_name: str, message: str) -> str:
         llm_text = self._query_ollama(demon_name, message)
         if llm_text:
+            self.last_response_source = "ollama"
             return llm_text
+        self.last_response_source = "fallback"
         return self.demon_personality.get_demon_response(demon_name, message)
 
     def startup_sequence(self):
@@ -492,13 +509,15 @@ class GoeticChatSystem:
                 self.terminal.typewriter_effect("Sessão carregada.")
             elif upper == "MODEL":
                 self.show_model_status()
+            elif upper == "HEALTH":
+                self.health_check()
             else:
                 self.terminal.print_error("Comando inválido. Digite HELP.")
 
     def show_help(self):
         print(
             "\nComandos: LIST | PROFILE <nome> | INVOKE <nome> | ASK <mensagem> | RITUAL | CHAT | MULTI | GRIMOIRE | REFERENCES | "
-            "HISTORY | SAVE | LOAD | CLEAR | MODEL | HELP | QUIT"
+            "HISTORY | SAVE | LOAD | CLEAR | MODEL | HEALTH | HELP | QUIT"
         )
 
     def ask_once(self, message: str):
@@ -512,7 +531,7 @@ class GoeticChatSystem:
             self.active_demon = "PAIMON"
 
         response = self.generate_response(self.active_demon, message)
-        print(f"{self.active_demon}: {response}")
+        print(f"{self.active_demon} [{self.last_response_source}]: {response}")
         self.conversation_history.append(
             {
                 "timestamp": datetime.now().strftime("%H:%M:%S"),
@@ -549,7 +568,18 @@ class GoeticChatSystem:
         print(f"LLM: {state}")
         print(f"Modelo: {SystemConfig.OLLAMA_MODEL}")
         print(f"Endpoint: {SystemConfig.OLLAMA_URL}")
+        print(f"Última fonte de resposta: {self.last_response_source}")
         print("Obs: requer Ollama/DeepSeek disponível localmente para respostas via API.")
+
+    def health_check(self):
+        print("[HEALTH] Verificando subsistemas...")
+        print(f"- Entidades carregadas: {len(self.grimoire_db.list_all_demons())}/{SystemConfig.DEMON_COUNT}")
+        print(f"- LLM habilitado: {SystemConfig.ENABLE_LLM}")
+        sample = self._query_ollama("OROBAS", "responda com a palavra: PRESENCA")
+        if sample:
+            print("- API Ollama: OK (respondeu)")
+        else:
+            print("- API Ollama: OFFLINE/indisponível (usando fallback local)")
 
     def show_references(self):
         self.terminal.print_blood_text("REFERÊNCIAS HISTÓRICAS")
@@ -619,7 +649,7 @@ class GoeticChatSystem:
                 continue
 
             response = self.generate_response(self.active_demon, msg)
-            print(f"{self.active_demon}: {response}")
+            print(f"{self.active_demon} [{self.last_response_source}]: {response}")
             self.conversation_history.append(
                 {
                     "timestamp": datetime.now().strftime("%H:%M:%S"),
@@ -655,7 +685,7 @@ class GoeticChatSystem:
                 continue
 
             response = self.generate_response(self.active_demon, msg)
-            print(f"{self.active_demon} -> {player}: {response}")
+            print(f"{self.active_demon} [{self.last_response_source}] -> {player}: {response}")
             self.conversation_history.append(
                 {
                     "timestamp": datetime.now().strftime("%H:%M:%S"),
