@@ -420,6 +420,30 @@ class GoeticChatSystem:
     def _save_session(self):
         SessionStore.save(SystemConfig.SESSION_FILE, self._serialize())
 
+    def _ollama_available(self) -> bool:
+        if not SystemConfig.ENABLE_LLM:
+            return False
+
+        payload = {
+            "model": SystemConfig.OLLAMA_MODEL,
+            "prompt": "responda apenas: ok",
+            "stream": False,
+            "options": {"temperature": 0},
+        }
+        data = json.dumps(payload).encode("utf-8")
+        req = request.Request(
+            SystemConfig.OLLAMA_URL,
+            data=data,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        try:
+            with request.urlopen(req, timeout=min(8, SystemConfig.OLLAMA_TIMEOUT_S)) as resp:
+                parsed = json.loads(resp.read().decode("utf-8"))
+                return bool((parsed.get("response") or "").strip())
+        except (error.URLError, TimeoutError, json.JSONDecodeError, OSError):
+            return False
+
     def _query_ollama(self, demon_name: str, user_message: str) -> Optional[str]:
         if not SystemConfig.ENABLE_LLM:
             return None
@@ -565,19 +589,21 @@ class GoeticChatSystem:
 
     def show_model_status(self):
         state = "ATIVO" if SystemConfig.ENABLE_LLM else "INATIVO"
-        print(f"LLM: {state}")
+        api_online = self._ollama_available()
+        print(f"LLM (config): {state}")
+        print(f"API Ollama (conectividade): {'ONLINE' if api_online else 'OFFLINE'}")
         print(f"Modelo: {SystemConfig.OLLAMA_MODEL}")
         print(f"Endpoint: {SystemConfig.OLLAMA_URL}")
         print(f"Última fonte de resposta: {self.last_response_source}")
-        print("Obs: requer Ollama/DeepSeek disponível localmente para respostas via API.")
+        if SystemConfig.ENABLE_LLM and not api_online:
+            print("Dica: inicie o Ollama e rode o modelo DeepSeek localmente para sair do fallback.")
 
     def health_check(self):
         print("[HEALTH] Verificando subsistemas...")
         print(f"- Entidades carregadas: {len(self.grimoire_db.list_all_demons())}/{SystemConfig.DEMON_COUNT}")
-        print(f"- LLM habilitado: {SystemConfig.ENABLE_LLM}")
-        sample = self._query_ollama("OROBAS", "responda com a palavra: PRESENCA")
-        if sample:
-            print("- API Ollama: OK (respondeu)")
+        print(f"- LLM habilitado (config): {SystemConfig.ENABLE_LLM}")
+        if self._ollama_available():
+            print("- API Ollama: ONLINE (respondeu)")
         else:
             print("- API Ollama: OFFLINE/indisponível (usando fallback local)")
 
