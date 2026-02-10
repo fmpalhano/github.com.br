@@ -3,6 +3,7 @@ import os
 import random
 import time
 from urllib import error, request
+from urllib.parse import urlparse
 from dataclasses import dataclass
 from datetime import datetime
 from hashlib import sha1
@@ -33,6 +34,8 @@ class SystemConfig:
     OLLAMA_URL = os.getenv("GOETIA_OLLAMA_URL", "http://127.0.0.1:11434/api/generate")
     OLLAMA_MODEL = os.getenv("GOETIA_MODEL", "deepseek-r1:8b")
     OLLAMA_TIMEOUT_S = int(os.getenv("GOETIA_OLLAMA_TIMEOUT", "45"))
+    OLLAMA_HEALTH_URL = os.getenv("GOETIA_OLLAMA_HEALTH_URL", "http://127.0.0.1:11434/api/tags")
+    LLM_DEBUG_LOG = Path(os.getenv("GOETIA_LLM_LOG", "goetia_llm.log"))
 
 
 class GrimoireDatabase:
@@ -399,6 +402,8 @@ class GoeticChatSystem:
         self.conversation_history: List[Dict[str, Any]] = []
         self.participants: List[str] = ["Operador"]
         self.last_response_source = "fallback"
+        self.llm_request_count = 0
+        self.last_llm_error = "nenhum"
         self._load_session()
 
     def _serialize(self) -> Dict[str, Any]:
@@ -420,32 +425,47 @@ class GoeticChatSystem:
     def _save_session(self):
         SessionStore.save(SystemConfig.SESSION_FILE, self._serialize())
 
+    def _log_llm(self, message: str) -> None:
+        ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        try:
+            with SystemConfig.LLM_DEBUG_LOG.open("a", encoding="utf-8") as fh:
+                fh.write(f"[{ts}] {message}\n")
+        except OSError:
+            pass
+
+    def _endpoint_hint(self) -> str:
+        host = urlparse(SystemConfig.OLLAMA_URL).hostname or ""
+        if host in {"127.0.0.1", "localhost"}:
+            return (
+                "Se o app roda em container/WSL e o Ollama no host Windows, "
+                "troque GOETIA_OLLAMA_URL para http://host.docker.internal:11434/api/generate"
+            )
+        return ""
+
     def _ollama_available(self) -> bool:
         if not SystemConfig.ENABLE_LLM:
+            self.last_llm_error = "LLM desabilitado por configuração"
             return False
 
-        payload = {
-            "model": SystemConfig.OLLAMA_MODEL,
-            "prompt": "responda apenas: ok",
-            "stream": False,
-            "options": {"temperature": 0},
-        }
-        data = json.dumps(payload).encode("utf-8")
-        req = request.Request(
-            SystemConfig.OLLAMA_URL,
-            data=data,
-            headers={"Content-Type": "application/json"},
-            method="POST",
-        )
+        req = request.Request(SystemConfig.OLLAMA_HEALTH_URL, method="GET")
         try:
-            with request.urlopen(req, timeout=min(8, SystemConfig.OLLAMA_TIMEOUT_S)) as resp:
-                parsed = json.loads(resp.read().decode("utf-8"))
-                return bool((parsed.get("response") or "").strip())
-        except (error.URLError, TimeoutError, json.JSONDecodeError, OSError):
+            with request.urlopen(req, timeout=min(6, SystemConfig.OLLAMA_TIMEOUT_S)) as resp:
+                if resp.status < 400:
+                    self.last_llm_error = "nenhum"
+                    return True
+                self.last_llm_error = f"health HTTP {resp.status}"
+                return False
+        except error.HTTPError as exc:
+            detail = exc.read().decode("utf-8", errors="ignore").strip()
+            self.last_llm_error = f"health HTTP {exc.code}: {detail[:180]}"
+            return False
+        except Exception as exc:
+            self.last_llm_error = f"health erro: {exc}"
             return False
 
     def _query_ollama(self, demon_name: str, user_message: str) -> Optional[str]:
         if not SystemConfig.ENABLE_LLM:
+            self.last_llm_error = "LLM desabilitado por configuração"
             return None
 
         prompt_pack = self.demon_personality.build_prompt(demon_name, user_message)
@@ -457,6 +477,10 @@ class GoeticChatSystem:
         }
 
         data = json.dumps(payload).encode("utf-8")
+        self.llm_request_count += 1
+        self._log_llm(
+            f"REQ#{self.llm_request_count} model={SystemConfig.OLLAMA_MODEL} url={SystemConfig.OLLAMA_URL} demon={demon_name} msg={user_message[:80]!r}"
+        )
         req = request.Request(
             SystemConfig.OLLAMA_URL,
             data=data,
@@ -467,8 +491,21 @@ class GoeticChatSystem:
             with request.urlopen(req, timeout=SystemConfig.OLLAMA_TIMEOUT_S) as resp:
                 parsed = json.loads(resp.read().decode("utf-8"))
                 text = (parsed.get("response") or "").strip()
-                return text or None
-        except (error.URLError, TimeoutError, json.JSONDecodeError, OSError):
+                if text:
+                    self.last_llm_error = "nenhum"
+                    self._log_llm(f"RES#{self.llm_request_count} ok chars={len(text)}")
+                    return text
+                self.last_llm_error = "resposta vazia da API"
+                self._log_llm(f"RES#{self.llm_request_count} vazia")
+                return None
+        except error.HTTPError as exc:
+            detail = exc.read().decode("utf-8", errors="ignore").strip()
+            self.last_llm_error = f"HTTP {exc.code}: {detail[:200]}"
+            self._log_llm(f"ERR#{self.llm_request_count} {self.last_llm_error}")
+            return None
+        except Exception as exc:
+            self.last_llm_error = str(exc)
+            self._log_llm(f"ERR#{self.llm_request_count} {self.last_llm_error}")
             return None
 
     def generate_response(self, demon_name: str, message: str) -> str:
@@ -535,13 +572,15 @@ class GoeticChatSystem:
                 self.show_model_status()
             elif upper == "HEALTH":
                 self.health_check()
+            elif upper == "PINGLLM":
+                self.ping_llm()
             else:
                 self.terminal.print_error("Comando inválido. Digite HELP.")
 
     def show_help(self):
         print(
             "\nComandos: LIST | PROFILE <nome> | INVOKE <nome> | ASK <mensagem> | RITUAL | CHAT | MULTI | GRIMOIRE | REFERENCES | "
-            "HISTORY | SAVE | LOAD | CLEAR | MODEL | HEALTH | HELP | QUIT"
+            "HISTORY | SAVE | LOAD | CLEAR | MODEL | HEALTH | PINGLLM | HELP | QUIT"
         )
 
     def ask_once(self, message: str):
@@ -595,8 +634,13 @@ class GoeticChatSystem:
         print(f"Modelo: {SystemConfig.OLLAMA_MODEL}")
         print(f"Endpoint: {SystemConfig.OLLAMA_URL}")
         print(f"Última fonte de resposta: {self.last_response_source}")
+        print(f"Tentativas de request LLM nesta execução: {self.llm_request_count}")
+        print(f"Último erro LLM: {self.last_llm_error}")
         if SystemConfig.ENABLE_LLM and not api_online:
-            print("Dica: inicie o Ollama e rode o modelo DeepSeek localmente para sair do fallback.")
+            print("Dica: inicie o Ollama e rode `ollama run <modelo>` para carregar o modelo na primeira vez.")
+            hint = self._endpoint_hint()
+            if hint:
+                print(f"Dica de rede: {hint}")
 
     def health_check(self):
         print("[HEALTH] Verificando subsistemas...")
@@ -606,6 +650,22 @@ class GoeticChatSystem:
             print("- API Ollama: ONLINE (respondeu)")
         else:
             print("- API Ollama: OFFLINE/indisponível (usando fallback local)")
+            print(f"- Motivo detectado: {self.last_llm_error}")
+
+    def ping_llm(self):
+        print("[PINGLLM] Testando chamada real ao modelo...")
+        probe_demon = self.active_demon or "OROBAS"
+        resp = self._query_ollama(probe_demon, "Responda em uma frase curta: conexão ativa.")
+        if resp:
+            print(f"- Resultado: ONLINE (resposta recebida, {len(resp)} chars)")
+            print(f"- Amostra: {resp[:180]}")
+        else:
+            print("- Resultado: FALHA na chamada do modelo")
+            print(f"- Erro: {self.last_llm_error}")
+            hint = self._endpoint_hint()
+            if hint:
+                print(f"- Dica: {hint}")
+        print(f"- Log: {SystemConfig.LLM_DEBUG_LOG}")
 
     def show_references(self):
         self.terminal.print_blood_text("REFERÊNCIAS HISTÓRICAS")
