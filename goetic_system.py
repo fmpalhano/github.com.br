@@ -19,7 +19,7 @@ class DemonRecord:
 
 
 class SystemConfig:
-    VERSION = "v2.0.0"
+    VERSION = "v2.1.0"
     DEMON_COUNT = 72
     GLITCH_CHANCE = 0.08
     TYPE_DELAY = 0.01
@@ -158,10 +158,11 @@ class GrimoireDatabase:
                 "rank": rec.rank,
                 "legions": rec.legions,
                 "attributes": rec.domains,
-                "description": f"Perfil tradicional em grimórios clássicos ({rec.rank}).",
+                "description": f"Ser infernal catalogado na tradição goética ({rec.rank}).",
                 "sigil": self._procedural_sigil(name),
-                "lore": f"{name} é listado na Ars Goetia; consultar edição crítica para variantes.",
+                "lore": f"{name} consta entre os 72 espíritos infernais da Ars Goetia; variantes textuais existem por edição.",
                 "source": self.references_key_to_text(rec.source),
+                "nature": "espírito infernal (tradição goética)",
             }
 
         return final_data
@@ -299,8 +300,9 @@ class DemonPersonality:
         )
         return (
             f"[{demon_name} | {rank}] {opening} "
-            f"No campo de {style} e {style2}, respondo: '{user_message}'. "
-            "Esta resposta é uma simulação textual baseada em grimórios históricos."
+            f"Sou tratado na tradição como entidade infernal, atuando em {style} e {style2}. "
+            f"Sobre tua pergunta '{user_message}', respondo no enquadramento ritual. "
+            "Simulação textual para estudo de Chaos Magick/Tecno Magick com base em grimórios históricos."
         )
 
 
@@ -381,6 +383,8 @@ class GoeticChatSystem:
                 self.chat_with_demon()
             elif upper.startswith("ASK "):
                 self.ask_once(cmd.split(maxsplit=1)[1])
+            elif upper.startswith("PROFILE "):
+                self.show_demon_profile(cmd.split(maxsplit=1)[1])
             elif upper == "GRIMOIRE":
                 self.consult_grimoire()
             elif upper == "HISTORY":
@@ -404,7 +408,7 @@ class GoeticChatSystem:
 
     def show_help(self):
         print(
-            "\nComandos: LIST | INVOKE <nome> | ASK <mensagem> | RITUAL | CHAT | MULTI | GRIMOIRE | REFERENCES | "
+            "\nComandos: LIST | PROFILE <nome> | INVOKE <nome> | ASK <mensagem> | RITUAL | CHAT | MULTI | GRIMOIRE | REFERENCES | "
             "HISTORY | SAVE | LOAD | CLEAR | HELP | QUIT"
         )
 
@@ -430,6 +434,23 @@ class GoeticChatSystem:
             }
         )
         self._save_session()
+
+
+    def show_demon_profile(self, demon_name: str):
+        key = demon_name.strip().upper()
+        demon = self.grimoire_db.get_demon(key)
+        if not demon:
+            self.terminal.print_error(f"'{key}' não está no catálogo.")
+            return
+
+        self.terminal.print_blood_text(f"PERFIL GOÉTICO: {key}")
+        print(f"Natureza: {demon.get('nature', 'N/D')}")
+        print(f"Rank: {demon.get('rank', 'N/D')}")
+        print(f"Legiões: {demon.get('legions', 'N/D')}")
+        print(f"Domínios: {', '.join(demon.get('attributes', []))}")
+        print(f"Descrição: {demon.get('description', '')}")
+        print(f"Lore: {demon.get('lore', '')}")
+        print(f"Fonte: {demon.get('source', '')}")
 
     def show_references(self):
         self.terminal.print_blood_text("REFERÊNCIAS HISTÓRICAS")
