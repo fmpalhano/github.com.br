@@ -30,7 +30,7 @@ run_exportador.bat
 - `--data-coluna`: nome da coluna de data (padrão: `DATA PROGRAMAÇÃO`).
 - `--data-inicio`: data inicial (`YYYY-MM-DD`).
 - `--data-fim`: data final (`YYYY-MM-DD`).
-- `--status-coluna`: nome da coluna de status (padrão: `STATUS SAP`).
+- `--status-coluna`: nome da coluna de status (padrão: `STATUS`).
 - `--status`: valor de status para filtrar.
 - `--prazo-conclusao`: data fixa replicada em `PRAZO CONCLUSÃO`.
 - `--data-programacao`: data fixa replicada em `DATA PROGRAMAÇÃO`.

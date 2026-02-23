@@ -21,7 +21,7 @@ if TYPE_CHECKING:
 
 DEFAULT_OUTPUT = "exportacao_siprog.xlsx"
 DEFAULT_DATA_COLUMN = "DATA PROGRAMAÇÃO"
-DEFAULT_STATUS_COLUMN = "STATUS SAP"
+DEFAULT_STATUS_COLUMN = "STATUS"
 DEFAULT_WORKSHEET = "PROGRAMAÇÃO_OBRAS"
 
 REQUIRED_COLUMNS = [
@@ -70,7 +70,7 @@ REQUIRED_COLUMNS = [
     "OBSERVAÇÃO",
 ]
 
-ESSENTIAL_COLUMNS = ["DATA", "DESCRIÇÃO OBRA", "STATUS SAP", "EQUIPE", "PEP", "CAPEX/OPEX"]
+ESSENTIAL_COLUMNS = ["DATA", "DESCRIÇÃO OBRA", "STATUS", "EQUIPE", "PEP"]
 
 
 class ExportadorErro(ValueError):
@@ -202,44 +202,44 @@ def transformar_base(df: "pd.DataFrame", prazo_conclusao: str, data_programacao:
     validar_colunas_essenciais(df)
     indice = _indice_colunas(df)
 
-    capex_opex = _texto(_obter_serie(df, indice, "CAPEX/OPEX"))
-    mascara_capex = capex_opex.str.upper() == "CAPEX"
-
+    data_base = _texto(_obter_serie(df, indice, "DATA"))
+    descricao_obra = _texto(_obter_serie(df, indice, "DESCRIÇÃO OBRA"))
+    status_sap = _texto(_obter_serie(df, indice, "STATUS"))
     equipe = _texto(_obter_serie(df, indice, "EQUIPE")).str[-12:]
     pep_num = _texto(_obter_serie(df, indice, "PEP")).map(_somente_digitos)
 
-    nota_projeto_base = _texto(_obter_serie(df, indice, "NOTA PROJETO - SOMENTE CAPEX")).map(_somente_digitos)
-    nota_cliente_base = _texto(_obter_serie(df, indice, "NOTA CLIENTE - SOMENTE CAPEX")).map(_somente_digitos)
-
-    if (nota_projeto_base == "").all():
-        nota_projeto_base = pep_num
-    if (nota_cliente_base == "").all():
-        nota_cliente_base = pep_num
-
-    status_sap = _texto(_obter_serie(df, indice, "STATUS SAP"))
-    descricao_obra = _texto(_obter_serie(df, indice, "DESCRIÇÃO OBRA"))
-    data_base = _texto(_obter_serie(df, indice, "DATA"))
-
-    ordem_servico = _texto(_obter_serie(df, indice, "ORDEM SERVIÇO – SOMENTE OPEX"))
-    valor_mo = _texto(_obter_serie(df, indice, "VALOR MÃO DE OBRA PROGRAMADA"))
+    valor_mo = _texto(_obter_serie(df, indice, "VALOR_PROGRAMADO"))
     turno = _texto(_obter_serie(df, indice, "TURNO"))
-    origem_reclamacao = _texto(_obter_serie(df, indice, "ORIGEM RECLAMAÇÃO"))
-    referencia = _texto(_obter_serie(df, indice, "REFERÊNCIA"))
+    if _normalizar_texto("REFERENCIA") in indice:
+        referencia = _obter_serie(df, indice, "REFERENCIA")
+    else:
+        referencia = _obter_serie(df, indice, "REFERÊNCIA")
+    referencia = referencia.where(~referencia.isna(), pd.NA)
+
+    municipio = _texto(_obter_serie(df, indice, "MUNICIPIO"))
     barramento = _texto(_obter_serie(df, indice, "BARRAMENTO/CD. EQUIPAMENTO – SOMENTE OPEX"))
 
-    resultado = pd.DataFrame(index=df.index)
+    linhas_validas = (data_base != "") | (descricao_obra != "") | (status_sap != "") | (equipe != "") | (pep_num != "")
+    df_base = df.loc[linhas_validas].copy()
+
+    resultado = pd.DataFrame(index=df_base.index)
     for col in REQUIRED_COLUMNS:
         resultado[col] = ""
 
-    resultado["CAPEX/OPEX"] = capex_opex
-    resultado["STATUS SAP"] = status_sap
-    resultado["NOME OBRA - SOMENTE CAPEX"] = descricao_obra
-    resultado["DATA INSPEÇÃO – SOMENTE OPEX"] = data_base
+    # Diretos
+    resultado["CAPEX/OPEX"] = "CAPEX"
+    resultado["DATA INSPEÇÃO – SOMENTE OPEX"] = data_base.loc[df_base.index]
+    resultado["NOME OBRA - SOMENTE CAPEX"] = descricao_obra.loc[df_base.index]
+    resultado["STATUS SAP"] = status_sap.loc[df_base.index]
+    resultado["EQUIPE"] = equipe.loc[df_base.index]
 
-    resultado["NOTA PROJETO - SOMENTE CAPEX"] = nota_projeto_base.where(mascara_capex, "")
-    resultado["NOTA CLIENTE - SOMENTE CAPEX"] = nota_cliente_base.where(mascara_capex, "")
-    resultado["ELEMENTO PEP – SOMENTE CAPEX"] = pep_num.where(mascara_capex, "")
+    # PEP/Notas somente CAPEX
+    pep_valid = pep_num.loc[df_base.index]
+    resultado["NOTA PROJETO - SOMENTE CAPEX"] = pep_valid
+    resultado["NOTA CLIENTE - SOMENTE CAPEX"] = pep_valid
+    resultado["ELEMENTO PEP – SOMENTE CAPEX"] = pep_valid
 
+    # Fixos
     resultado["REGIONAL"] = "NORTE"
     resultado["PARCEIRA"] = "SETUP METROPOLITANA (NORTE-EXPANSAO MT/BT)"
     resultado["QUANTIDADES DIAS"] = 1
@@ -255,13 +255,14 @@ def transformar_base(df: "pd.DataFrame", prazo_conclusao: str, data_programacao:
     resultado["REGULADO ANEEL"] = "SIM"
     resultado["TIPO INTERVENÇÃO"] = "SEM NECESSIDADE DE DESLIGAMENTO"
 
-    resultado["EQUIPE"] = equipe
-    resultado["ORDEM SERVIÇO – SOMENTE OPEX"] = ordem_servico
-    resultado["VALOR MÃO DE OBRA PROGRAMADA"] = valor_mo
-    resultado["TURNO"] = turno
-    resultado["ORIGEM RECLAMAÇÃO"] = origem_reclamacao
-    resultado["REFERÊNCIA"] = referencia
-    resultado["BARRAMENTO/CD. EQUIPAMENTO – SOMENTE OPEX"] = barramento
+    # Campos opcionais / vazios preservados
+    resultado["REFERÊNCIA"] = referencia.loc[df_base.index]
+    resultado["MUNICIPIO – SOMENTE CAPEX"] = municipio.loc[df_base.index]
+    resultado["ORDEM SERVIÇO – SOMENTE OPEX"] = ""
+    resultado["VALOR MÃO DE OBRA PROGRAMADA"] = valor_mo.loc[df_base.index]
+    resultado["TURNO"] = turno.loc[df_base.index]
+    resultado["ORIGEM RECLAMAÇÃO"] = ""
+    resultado["BARRAMENTO/CD. EQUIPAMENTO – SOMENTE OPEX"] = barramento.loc[df_base.index]
 
     return resultado
 
