@@ -36,6 +36,7 @@ Se precisar, edite as variáveis no topo do `.bat` antes de executar.
 - `GUI_EXECUCAO=0`: executa somente no terminal.
 - `PRAZO_CONCLUSAO`: valor usado para preencher `PRAZO CONCLUSÃO` em todas as linhas.
 - `DATA_PROGRAMACAO`: valor usado para preencher `DATA PROGRAMAÇÃO` em todas as linhas.
+- `LLM_MODELO`: modelo local do Ollama usado no assistente de I.A. (ex.: `llama3.1`).
 
 > Se a janela abrir e fechar rápido no Windows: o `.bat` usa `PAUSAR_NO_FINAL=1` por padrão, então a mensagem de erro/sucesso fica visível até você pressionar uma tecla.
 
@@ -46,6 +47,7 @@ Se precisar, edite as variáveis no topo do `.bat` antes de executar.
 - `--selecionar-aba`: mostra lista de abas para seleção manual durante a execução.
 - `--gui-colunas`: abre interface para pesquisar colunas e visualizar amostras dos dados da aba antes de exportar.
 - `--gui-execucao`: abre painel de execução com logs em tempo real e barra de progresso.
+- `--llm-modelo`: define o modelo Llama do assistente de I.A. no painel GUI.
 - `--data-coluna`: nome da coluna de data (padrão: `DATA PROGRAMAÇÃO`).
 - `--data-inicio`: data inicial (`YYYY-MM-DD`).
 - `--data-fim`: data final (`YYYY-MM-DD`).
@@ -106,7 +108,7 @@ As colunas abaixo **sempre** são exportadas (na ordem) e devem existir na plani
 
 ## Comportamento
 
-- A aba padrão processada é `PROGRAMACAO_OBRAS` (quando `--aba` não é informado).
+- A aba padrão processada é `PROGRAMACÃO_OBRAS` (quando `--aba` não é informado).
 - O exportador valida e exige todas as colunas obrigatórias do layout SIPROG.
 - O mapeamento de colunas tolera variação de espaços e tipos de travessão (`-`, `–`, `—`).
 - Avisos visuais do `openpyxl` sobre extensões de formatação/validação são suprimidos na leitura para não poluir a execução operacional.

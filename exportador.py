@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import re
 import threading
 import traceback
@@ -22,7 +23,9 @@ if TYPE_CHECKING:
 DEFAULT_OUTPUT = "exportacao_siprog.xlsx"
 DEFAULT_DATA_COLUMN = "DATA PROGRAMAÇÃO"
 DEFAULT_STATUS_COLUMN = "STATUS SAP"
-DEFAULT_WORKSHEET = "PROGRAMACAO_OBRAS"
+DEFAULT_WORKSHEET = "PROGRAMACÃO_OBRAS"
+DEFAULT_WORKSHEET_ALIASES = ["PROGRAMACÃO_OBRAS", "PROGRAMACAO_OBRAS"]
+DEFAULT_LLM_MODEL = "llama3.1"
 
 REQUIRED_COLUMNS = [
     "CAPEX/OPEX",
@@ -351,7 +354,7 @@ def construir_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Exportador SIPROG")
 
     parser.add_argument("--arquivo", help="Caminho do arquivo .xlsx de entrada")
-    parser.add_argument("--aba", help="Nome (ou índice) da aba a ser exportada (sobrescreve o padrão PROGRAMACAO_OBRAS)")
+    parser.add_argument("--aba", help="Nome (ou índice) da aba a ser exportada (sobrescreve o padrão PROGRAMACÃO_OBRAS)")
     parser.add_argument(
         "--selecionar-aba",
         action="store_true",
@@ -378,6 +381,11 @@ def construir_parser() -> argparse.ArgumentParser:
         "--gui-execucao",
         action="store_true",
         help="Abre painel visual com logs em tempo real e status/loading da execução",
+    )
+    parser.add_argument(
+        "--llm-modelo",
+        default=DEFAULT_LLM_MODEL,
+        help=f"Modelo Llama usado no assistente (padrão: {DEFAULT_LLM_MODEL})",
     )
 
     parser.add_argument(
@@ -613,9 +621,9 @@ def _executar_fluxo(args: argparse.Namespace, log=None, progresso=None) -> None:
 
     sheet_name = _parse_sheet_name(args.aba)
     if sheet_name is None:
+        sheet_name = _resolver_aba_padrao(abas)
         nomes_normalizados = {_normalizar_texto(a): a for a in abas}
-        sheet_name = nomes_normalizados.get(_normalizar_texto(DEFAULT_WORKSHEET), DEFAULT_WORKSHEET)
-        if _normalizar_texto(DEFAULT_WORKSHEET) in nomes_normalizados:
+        if _normalizar_texto(sheet_name) in nomes_normalizados:
             _log(f"Aba padrão aplicada: {sheet_name}")
         else:
             _log(
@@ -692,8 +700,15 @@ def _executar_com_gui(args: argparse.Namespace) -> None:
     progresso.pack(fill="x", padx=12, pady=(12, 6))
     ttk.Label(raiz, textvariable=status_var).pack(anchor="w", padx=12)
 
-    logs = ScrolledText(raiz, height=24, state="disabled")
-    logs.pack(fill="both", expand=True, padx=12, pady=12)
+    logs = ScrolledText(raiz, height=20, state="disabled")
+    logs.pack(fill="both", expand=True, padx=12, pady=(8, 8))
+
+    ai_ativa = {"valor": False}
+    painel_ai = ttk.LabelFrame(raiz, text="Assistente I.A. (Llama)")
+    painel_ai.pack(fill="x", padx=12, pady=(0, 10))
+
+    entrada_ai = ttk.Entry(painel_ai)
+    entrada_ai.pack(side="left", fill="x", expand=True, padx=8, pady=8)
 
     def log_local(msg: str) -> None:
         logs.configure(state="normal")
@@ -701,6 +716,32 @@ def _executar_com_gui(args: argparse.Namespace) -> None:
         logs.see(END)
         logs.configure(state="disabled")
         raiz.update_idletasks()
+
+    def ativar_ia() -> None:
+        ai_ativa["valor"] = True
+        status_var.set("I.A. ativada")
+        log_local(f"I.A. ativada (modelo: {args.llm_modelo})")
+
+    def desativar_ia() -> None:
+        ai_ativa["valor"] = False
+        status_var.set("I.A. desativada")
+        log_local("I.A. desativada")
+
+    def perguntar_ia() -> None:
+        pergunta = entrada_ai.get().strip()
+        if not pergunta:
+            log_local("[I.A.] Digite uma pergunta antes de enviar.")
+            return
+        if not ai_ativa["valor"]:
+            log_local("[I.A.] Ative a I.A. antes de perguntar.")
+            return
+        log_local(f"[I.A. Pergunta] {pergunta}")
+        resposta = _llm_responder_local(pergunta, args.llm_modelo)
+        log_local(f"[I.A. Resposta] {resposta}")
+
+    ttk.Button(painel_ai, text="Ativar I.A.", command=ativar_ia).pack(side="left", padx=4, pady=8)
+    ttk.Button(painel_ai, text="Desativar I.A.", command=desativar_ia).pack(side="left", padx=4, pady=8)
+    ttk.Button(painel_ai, text="Perguntar", command=perguntar_ia).pack(side="left", padx=4, pady=8)
 
     # Pré-etapas no thread principal para evitar travamentos de GUI.
     if args.selecionar_arquivos:
@@ -716,7 +757,7 @@ def _executar_com_gui(args: argparse.Namespace) -> None:
     log_local(f"Abas detectadas ({len(abas)}): {_listar_abas_texto(abas)}")
 
     if args.selecionar_aba:
-        log_local("Aviso: --selecionar-aba foi ignorado. O fluxo está fixado na aba PROGRAMACAO_OBRAS.")
+        log_local("Aviso: --selecionar-aba foi ignorado. O fluxo está fixado na aba PROGRAMACÃO_OBRAS.")
 
     def add_log(msg: str) -> None:
         fila.put(("log", msg))
@@ -755,6 +796,40 @@ def _executar_com_gui(args: argparse.Namespace) -> None:
     threading.Thread(target=worker, daemon=True).start()
     processar_fila()
     raiz.mainloop()
+
+
+def _resolver_aba_padrao(abas: list[str]) -> str:
+    nomes_normalizados = {_normalizar_texto(a): a for a in abas}
+    for candidata in DEFAULT_WORKSHEET_ALIASES:
+        encontrada = nomes_normalizados.get(_normalizar_texto(candidata))
+        if encontrada:
+            return encontrada
+    return DEFAULT_WORKSHEET
+
+
+def _llm_responder_local(prompt: str, modelo: str) -> str:
+    try:
+        import urllib.request
+        import urllib.error
+    except Exception as exc:  # pragma: no cover
+        return f"Falha ao carregar cliente HTTP para LLM: {exc}"
+
+    payload = json.dumps({"model": modelo, "prompt": prompt, "stream": False}).encode("utf-8")
+    req = urllib.request.Request(
+        "http://127.0.0.1:11434/api/generate",
+        data=payload,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+            return str(data.get("response", "")).strip() or "(sem resposta)"
+    except Exception as exc:
+        return (
+            "LLM indisponível. Verifique se o Ollama está ativo em localhost:11434 "
+            f"e se o modelo '{modelo}' está instalado. Erro: {exc}"
+        )
 
 
 def _validar_argumentos(args: argparse.Namespace, parser: argparse.ArgumentParser) -> None:
