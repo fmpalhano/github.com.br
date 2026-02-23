@@ -27,7 +27,7 @@ run_exportador.bat
 - `--aba`: aba de leitura; se omitido, o sistema busca automaticamente `PROGRAMAÇÃO_OBRAS` ignorando acento/maiúsculas/espaços.
 - `--selecionar-arquivos`: abre janela para selecionar planilha de entrada e pasta de saída.
 - `--gui-execucao`: abre painel visual com logs em tempo real e barra de progresso.
-- `--data-coluna`: nome da coluna de data (padrão: `DATA PROGRAMAÇÃO`).
+- `--data-coluna`: nome da coluna de data (padrão: `DATA`).
 - `--data-inicio`: data inicial (`YYYY-MM-DD`).
 - `--data-fim`: data final (`YYYY-MM-DD`).
 - `--status-coluna`: nome da coluna de status (padrão: `STATUS`).

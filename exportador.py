@@ -20,7 +20,7 @@ if TYPE_CHECKING:
     import pandas as pd
 
 DEFAULT_OUTPUT = "exportacao_siprog.xlsx"
-DEFAULT_DATA_COLUMN = "DATA PROGRAMAÇÃO"
+DEFAULT_DATA_COLUMN = "DATA"
 DEFAULT_STATUS_COLUMN = "STATUS"
 DEFAULT_WORKSHEET = "PROGRAMAÇÃO_OBRAS"
 
@@ -179,7 +179,14 @@ def aplicar_filtros(
     if data_inicio or data_fim:
         col_data = indice.get(_normalizar_texto(data_coluna))
         if not col_data:
-            raise ExportadorErro(f"Coluna de data '{data_coluna}' não encontrada.")
+            # fallback resiliente para bases que usam DATA em vez de DATA PROGRAMAÇÃO
+            col_data = indice.get(_normalizar_texto("DATA"))
+        if not col_data:
+            disponiveis = ", ".join(list(resultado.columns)[:12])
+            raise ExportadorErro(
+                f"Coluna de data '{data_coluna}' não encontrada. "
+                f"Informe --data-coluna corretamente. Exemplo de colunas disponíveis: {disponiveis}"
+            )
         resultado[col_data] = pd.to_datetime(resultado[col_data], errors="coerce")
         if data_inicio:
             resultado = resultado[resultado[col_data] >= pd.to_datetime(data_inicio)]
