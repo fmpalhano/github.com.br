@@ -11,7 +11,6 @@ python exportador.py \
   --data-fim 2026-02-20 \
   --status LIB/LOG \
   --prazo-conclusao 31/03/2026 \
-  --data-programacao 23/02/2026 \
   --saida exportacao_siprog.xlsx
 ```
 
@@ -49,14 +48,13 @@ Duplo clique no `.exe` (sem argumentos) agora abre automaticamente:
 - `--aba`: aba de leitura; se omitido, o sistema busca automaticamente `PROGRAMAÇÃO_OBRAS` ignorando acento/maiúsculas/espaços.
 - `--selecionar-arquivos`: abre janela para selecionar planilha de entrada e pasta de saída.
 - `--gui-execucao`: abre painel visual com logs em tempo real e barra de progresso.
-- `--selecionar-datas`: abre janela para escolher `prazo_conclusao`, `data_programacao`, `data_inicio` e `data_fim`.
+- `--selecionar-datas`: abre janela para escolher `prazo_conclusao`, `data_inicio` e `data_fim`.
 - `--data-coluna`: nome da coluna de data (padrão: `DATA`).
 - `--data-inicio`: data inicial (`YYYY-MM-DD`).
 - `--data-fim`: data final (`YYYY-MM-DD`).
 - `--status-coluna`: nome da coluna de status (padrão: `STATUS`).
 - `--status`: valor de status para filtrar.
 - `--prazo-conclusao`: data fixa replicada em `PRAZO CONCLUSÃO`.
-- `--data-programacao`: data fixa replicada em `DATA PROGRAMAÇÃO`.
 - `--saida`: caminho do arquivo final.
 
 ## Comportamento

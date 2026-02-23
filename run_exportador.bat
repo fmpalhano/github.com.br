@@ -8,7 +8,6 @@ set "DATA_INICIO=2026-02-01"
 set "DATA_FIM=2026-02-20"
 set "STATUS=LIB/LOG"
 set "PRAZO_CONCLUSAO="
-set "DATA_PROGRAMACAO="
 
 REM Controles de execucao:
 set "PAUSAR_NO_FINAL=1"
@@ -33,9 +32,9 @@ if "%GUI_EXECUCAO%"=="1" set "EXTRA_FLAGS=%EXTRA_FLAGS% --gui-execucao"
 if "%SELECIONAR_DATAS%"=="1" set "EXTRA_FLAGS=%EXTRA_FLAGS% --selecionar-datas"
 
 if "%MODO_TELA%"=="1" (
-  python exportador.py --selecionar-arquivos %EXTRA_FLAGS% --data-inicio %DATA_INICIO% --data-fim %DATA_FIM% --status "%STATUS%" --prazo-conclusao "%PRAZO_CONCLUSAO%" --data-programacao "%DATA_PROGRAMACAO%" --saida "%ARQUIVO_SAIDA%"
+  python exportador.py --selecionar-arquivos %EXTRA_FLAGS% --data-inicio %DATA_INICIO% --data-fim %DATA_FIM% --status "%STATUS%" --prazo-conclusao "%PRAZO_CONCLUSAO%" --saida "%ARQUIVO_SAIDA%"
 ) else (
-  python exportador.py --arquivo "%ARQUIVO_ENTRADA%" %EXTRA_FLAGS% --data-inicio %DATA_INICIO% --data-fim %DATA_FIM% --status "%STATUS%" --prazo-conclusao "%PRAZO_CONCLUSAO%" --data-programacao "%DATA_PROGRAMACAO%" --saida "%ARQUIVO_SAIDA%"
+  python exportador.py --arquivo "%ARQUIVO_ENTRADA%" %EXTRA_FLAGS% --data-inicio %DATA_INICIO% --data-fim %DATA_FIM% --status "%STATUS%" --prazo-conclusao "%PRAZO_CONCLUSAO%" --saida "%ARQUIVO_SAIDA%"
 )
 
 if errorlevel 1 (
