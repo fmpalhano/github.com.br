@@ -436,6 +436,7 @@ def _selecionar_datas_gui(args: argparse.Namespace) -> None:
             return
 
         try:
+            _parse_data_param(args.prazo_conclusao, "Prazo Conclusão")
             if args.data_inicio:
                 _parse_data_param(args.data_inicio, "--data-inicio")
             if args.data_fim:
@@ -634,6 +635,16 @@ def validar_argumentos(args: argparse.Namespace, parser: argparse.ArgumentParser
     if not args.selecionar_datas:
         if not args.prazo_conclusao:
             parser.error("informe --prazo-conclusao ou use --selecionar-datas")
+
+    try:
+        if args.prazo_conclusao:
+            _parse_data_param(args.prazo_conclusao, "--prazo-conclusao")
+        if args.data_inicio:
+            _parse_data_param(args.data_inicio, "--data-inicio")
+        if args.data_fim:
+            _parse_data_param(args.data_fim, "--data-fim")
+    except ExportadorErro as exc:
+        parser.error(str(exc))
 
 
 def main() -> None:
