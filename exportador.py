@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import re
+import sys
 import threading
 import traceback
 import unicodedata
@@ -348,7 +349,13 @@ def _selecionar_datas_gui(args: argparse.Namespace) -> None:
 def executar_pipeline(args: argparse.Namespace, log=print, progresso=None) -> None:
     if args.selecionar_arquivos:
         log("Abrindo seleção de planilha e pasta...")
-        args.arquivo, args.saida = _selecionar_arquivo_e_pasta(args.saida)
+        try:
+            args.arquivo, args.saida = _selecionar_arquivo_e_pasta(args.saida)
+        except TclError as exc:
+            raise ExportadorErro(
+                "Não foi possível abrir a seleção de arquivo/pasta neste ambiente. "
+                "Informe --arquivo e --saida manualmente."
+            ) from exc
 
     if args.selecionar_datas:
         log("Abrindo seleção de datas...")
@@ -475,9 +482,20 @@ def construir_parser() -> argparse.ArgumentParser:
     return parser
 
 
+
+
+def _aplicar_modo_autonomo_se_sem_args(args: argparse.Namespace) -> None:
+    """Quando executado sem argumentos (ex.: duplo clique no .exe), habilita modo gui autônomo."""
+    if len(sys.argv) != 1:
+        return
+
+    args.selecionar_arquivos = True
+    args.selecionar_datas = True
+    args.gui_execucao = True
+
 def validar_argumentos(args: argparse.Namespace, parser: argparse.ArgumentParser) -> None:
     if not args.arquivo and not args.selecionar_arquivos:
-        parser.error("informe --arquivo ou use --selecionar-arquivos")
+        parser.error("informe --arquivo ou use --selecionar-arquivos (no .exe, execute sem argumentos para abrir as telas)")
     if not args.selecionar_datas:
         if not args.prazo_conclusao:
             parser.error("informe --prazo-conclusao ou use --selecionar-datas")
@@ -488,6 +506,7 @@ def validar_argumentos(args: argparse.Namespace, parser: argparse.ArgumentParser
 def main() -> None:
     parser = construir_parser()
     args = parser.parse_args()
+    _aplicar_modo_autonomo_se_sem_args(args)
     validar_argumentos(args, parser)
 
     if args.gui_execucao:

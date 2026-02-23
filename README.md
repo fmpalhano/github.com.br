@@ -35,6 +35,11 @@ Saída esperada:
 
 - `dist\exportador_siprog.exe`
 
+Duplo clique no `.exe` (sem argumentos) agora abre automaticamente:
+- seleção de planilha/pasta,
+- seleção das datas obrigatórias,
+- painel de execução com logs.
+
 > Assinado por: Felipe de Moraes Palhano.
 
 ## Argumentos
