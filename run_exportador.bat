@@ -18,7 +18,8 @@ REM Controles de execucao:
 set "PAUSAR_NO_FINAL=1"
 set "MODO_TELA=1"
 set "ESCOLHER_ABA=1"
-set "GUI_COLUNAS=1"
+set "GUI_COLUNAS=0"
+set "GUI_EXECUCAO=1"
 
 echo =============================================
 echo   Exportador SIPROG - Execucao de teste
@@ -40,6 +41,7 @@ if "%ESCOLHER_ABA%"=="1" (
 )
 
 if "%GUI_COLUNAS%"=="1" set "EXTRA_FLAGS=%EXTRA_FLAGS% --gui-colunas"
+if "%GUI_EXECUCAO%"=="1" set "EXTRA_FLAGS=%EXTRA_FLAGS% --gui-execucao"
 
 if "%MODO_TELA%"=="1" (
   echo      Modo tela habilitado: selecione a planilha e a pasta de trabalho.

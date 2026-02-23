@@ -32,6 +32,8 @@ Se precisar, edite as variáveis no topo do `.bat` antes de executar.
 - `ESCOLHER_ABA=0`: usa a aba definida por `--aba` (ou a primeira aba, por padrão).
 - `GUI_COLUNAS=1`: abre uma janela para pesquisar colunas e visualizar amostras de valores.
 - `GUI_COLUNAS=0`: desativa a visualização GUI de colunas.
+- `GUI_EXECUCAO=1`: abre painel visual com logs em tempo real e barra de loading/status.
+- `GUI_EXECUCAO=0`: executa somente no terminal.
 - `PRAZO_CONCLUSAO`: valor usado para preencher `PRAZO CONCLUSÃO` em todas as linhas.
 - `DATA_PROGRAMACAO`: valor usado para preencher `DATA PROGRAMAÇÃO` em todas as linhas.
 
@@ -43,6 +45,7 @@ Se precisar, edite as variáveis no topo do `.bat` antes de executar.
 - `--aba`: nome ou índice da aba para leitura.
 - `--selecionar-aba`: mostra lista de abas para seleção manual durante a execução.
 - `--gui-colunas`: abre interface para pesquisar colunas e visualizar amostras dos dados da aba antes de exportar.
+- `--gui-execucao`: abre painel de execução com logs em tempo real e barra de progresso.
 - `--data-coluna`: nome da coluna de data (padrão: `DATA PROGRAMAÇÃO`).
 - `--data-inicio`: data inicial (`YYYY-MM-DD`).
 - `--data-fim`: data final (`YYYY-MM-DD`).

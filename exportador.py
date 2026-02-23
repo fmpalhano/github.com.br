@@ -5,12 +5,16 @@ from __future__ import annotations
 
 import argparse
 import re
+import threading
+import traceback
 import warnings
+from queue import Empty, Queue
 from pathlib import Path
 from typing import TYPE_CHECKING, Iterable
 
-from tkinter import Tk, Toplevel, END, StringVar, filedialog
+from tkinter import Tk, Toplevel, END, StringVar, TclError, filedialog
 from tkinter import ttk
+from tkinter.scrolledtext import ScrolledText
 
 if TYPE_CHECKING:
     import pandas as pd
@@ -369,6 +373,11 @@ def construir_parser() -> argparse.ArgumentParser:
             "antes da exportação"
         ),
     )
+    parser.add_argument(
+        "--gui-execucao",
+        action="store_true",
+        help="Abre painel visual com logs em tempo real e status/loading da execução",
+    )
 
     parser.add_argument(
         "--data-coluna",
@@ -536,6 +545,180 @@ def _abrir_gui_colunas(df: "pd.DataFrame") -> list[str]:
     return selecionadas
 
 
+def _escolher_aba_gui(caminho_arquivo: str) -> str:
+    abas = listar_abas(caminho_arquivo)
+    if not abas:
+        raise ExportadorErro("Nenhuma aba encontrada no arquivo selecionado.")
+    if len(abas) == 1:
+        return abas[0]
+
+    raiz = Tk()
+    raiz.withdraw()
+    janela = Toplevel(raiz)
+    janela.title("Selecionar aba")
+    janela.geometry("460x420")
+
+    ttk.Label(janela, text="Selecione a aba para processar:").pack(anchor="w", padx=12, pady=(12, 6))
+    lista = ttk.Treeview(janela, columns=("aba",), show="headings", height=14)
+    lista.heading("aba", text="Aba")
+    lista.column("aba", width=420, anchor="w")
+    lista.pack(fill="both", expand=True, padx=12)
+
+    for aba in abas:
+        lista.insert("", END, values=(aba,))
+
+    selecionada: str = abas[0]
+
+    def confirmar() -> None:
+        nonlocal selecionada
+        itens = lista.selection()
+        if itens:
+            selecionada = str(lista.item(itens[0], "values")[0])
+        janela.destroy()
+
+    ttk.Button(janela, text="Confirmar", command=confirmar).pack(pady=10)
+    janela.transient(raiz)
+    janela.grab_set()
+    janela.protocol("WM_DELETE_WINDOW", confirmar)
+    raiz.wait_window(janela)
+    raiz.destroy()
+    return selecionada
+
+
+def _executar_fluxo(args: argparse.Namespace, log=None, progresso=None) -> None:
+    def _log(msg: str) -> None:
+        if log:
+            log(msg)
+        else:
+            print(msg)
+
+    if progresso:
+        progresso(5, "Iniciando")
+
+    if args.selecionar_arquivos:
+        _log("Abrindo seleção de planilha e pasta...")
+        args.arquivo, args.saida = _selecionar_arquivo_e_pasta(args.saida)
+
+    sheet_name = _parse_sheet_name(args.aba)
+    if args.selecionar_aba:
+        _log("Selecionando aba de trabalho...")
+        if args.gui_execucao:
+            sheet_name = _escolher_aba_gui(args.arquivo)
+        else:
+            sheet_name = _escolher_aba_interativamente(args.arquivo)
+    elif sheet_name is None:
+        sheet_name = 0
+
+    _log(f"Carregando base: {args.arquivo}")
+    if progresso:
+        progresso(20, "Carregando base")
+    df = carregar_base(args.arquivo, sheet_name=sheet_name)
+    _log(f"Registros carregados: {len(df)}")
+
+    if args.gui_colunas and not args.gui_execucao:
+        _log("Abrindo visualização de colunas...")
+        colunas_gui = _abrir_gui_colunas(df)
+        if colunas_gui:
+            adicionais_gui = ",".join(colunas_gui)
+            args.colunas = f"{args.colunas},{adicionais_gui}" if args.colunas else adicionais_gui
+            _log(f"Colunas adicionais selecionadas: {len(colunas_gui)}")
+    elif args.gui_colunas and args.gui_execucao:
+        _log("Aviso: --gui-colunas é ignorado com --gui-execucao para evitar travamentos de interface.")
+
+    if progresso:
+        progresso(40, "Aplicando filtros")
+    _log("Aplicando filtros...")
+    df = aplicar_filtros(
+        df,
+        data_coluna=args.data_coluna,
+        data_inicio=args.data_inicio,
+        data_fim=args.data_fim,
+        status_coluna=args.status_coluna,
+        status=args.status,
+    )
+    _log(f"Registros após filtros: {len(df)}")
+
+    if progresso:
+        progresso(65, "Transformando dados")
+    _log("Aplicando regras de transformação...")
+    df = transformar_base(
+        df,
+        prazo_conclusao=args.prazo_conclusao,
+        data_programacao=args.data_programacao,
+    )
+
+    if progresso:
+        progresso(82, "Montando layout")
+    _log("Montando layout final...")
+    df = selecionar_colunas(df, args.colunas)
+
+    if progresso:
+        progresso(95, "Exportando")
+    _log(f"Exportando arquivo: {args.saida}")
+    exportar(df, args.saida)
+
+    if progresso:
+        progresso(100, "Concluído")
+    _log("Processo finalizado com sucesso.")
+
+
+def _executar_com_gui(args: argparse.Namespace) -> None:
+    fila: Queue[tuple[str, str]] = Queue()
+
+    raiz = Tk()
+    raiz.title("Exportador SIPROG - Execução")
+    raiz.geometry("900x560")
+
+    status_var = StringVar(value="Aguardando início...")
+    progresso = ttk.Progressbar(raiz, orient="horizontal", mode="determinate", maximum=100)
+    progresso.pack(fill="x", padx=12, pady=(12, 6))
+    ttk.Label(raiz, textvariable=status_var).pack(anchor="w", padx=12)
+
+    logs = ScrolledText(raiz, height=24, state="disabled")
+    logs.pack(fill="both", expand=True, padx=12, pady=12)
+
+    def add_log(msg: str) -> None:
+        fila.put(("log", msg))
+
+    def set_progress(valor: int, status: str) -> None:
+        fila.put(("progress", f"{valor}|{status}"))
+
+    def worker() -> None:
+        try:
+            _executar_fluxo(args, log=add_log, progresso=set_progress)
+            fila.put(("done", "ok"))
+        except Exception:
+            fila.put(("log", traceback.format_exc()))
+            fila.put(("done", "erro"))
+
+    def processar_fila() -> None:
+        try:
+            while True:
+                tipo, conteudo = fila.get_nowait()
+                if tipo == "log":
+                    logs.configure(state="normal")
+                    logs.insert(END, conteudo + "\n")
+                    logs.see(END)
+                    logs.configure(state="disabled")
+                elif tipo == "progress":
+                    valor_txt, status = conteudo.split("|", 1)
+                    progresso["value"] = int(valor_txt)
+                    status_var.set(status)
+                elif tipo == "done":
+                    if conteudo == "ok":
+                        status_var.set("Concluído com sucesso")
+                    else:
+                        status_var.set("Erro durante execução (veja logs)")
+                    return
+        except Empty:
+            pass
+        raiz.after(120, processar_fila)
+
+    threading.Thread(target=worker, daemon=True).start()
+    processar_fila()
+    raiz.mainloop()
+
+
 def _validar_argumentos(args: argparse.Namespace, parser: argparse.ArgumentParser) -> None:
     if not args.arquivo and not args.selecionar_arquivos:
         parser.error("informe --arquivo ou use --selecionar-arquivos para abrir a tela de seleção")
@@ -550,43 +733,14 @@ def main() -> None:
     args = parser.parse_args()
     _validar_argumentos(args, parser)
 
-    if args.selecionar_arquivos:
-        args.arquivo, args.saida = _selecionar_arquivo_e_pasta(args.saida)
+    if args.gui_execucao:
+        try:
+            _executar_com_gui(args)
+            return
+        except TclError:
+            print("Aviso: interface gráfica indisponível neste ambiente. Executando em modo terminal.")
 
-    sheet_name = _parse_sheet_name(args.aba)
-    if args.selecionar_aba:
-        sheet_name = _escolher_aba_interativamente(args.arquivo)
-    elif sheet_name is None:
-        # Evita retorno em dict quando o arquivo possui múltiplas abas.
-        sheet_name = 0
-
-    df = carregar_base(args.arquivo, sheet_name=sheet_name)
-
-    if args.gui_colunas:
-        colunas_gui = _abrir_gui_colunas(df)
-        if colunas_gui:
-            adicionais_gui = ",".join(colunas_gui)
-            if args.colunas:
-                args.colunas = f"{args.colunas},{adicionais_gui}"
-            else:
-                args.colunas = adicionais_gui
-
-    df = aplicar_filtros(
-        df,
-        data_coluna=args.data_coluna,
-        data_inicio=args.data_inicio,
-        data_fim=args.data_fim,
-        status_coluna=args.status_coluna,
-        status=args.status,
-    )
-    df = transformar_base(
-        df,
-        prazo_conclusao=args.prazo_conclusao,
-        data_programacao=args.data_programacao,
-    )
-    df = selecionar_colunas(df, args.colunas)
-
-    exportar(df, args.saida)
+    _executar_fluxo(args)
 
 
 if __name__ == "__main__":
