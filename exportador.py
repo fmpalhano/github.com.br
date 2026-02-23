@@ -585,6 +585,13 @@ def _escolher_aba_gui(caminho_arquivo: str) -> str:
     return selecionada
 
 
+
+
+def _listar_abas_texto(abas: list[str]) -> str:
+    if not abas:
+        return "(nenhuma aba)"
+    return ", ".join(abas)
+
 def _executar_fluxo(args: argparse.Namespace, log=None, progresso=None) -> None:
     def _log(msg: str) -> None:
         if log:
@@ -599,16 +606,18 @@ def _executar_fluxo(args: argparse.Namespace, log=None, progresso=None) -> None:
         _log("Abrindo seleção de planilha e pasta...")
         args.arquivo, args.saida = _selecionar_arquivo_e_pasta(args.saida)
 
+    _log("Verificando abas disponíveis na planilha...")
+    abas = listar_abas(args.arquivo)
+    _log(f"Abas encontradas ({len(abas)}): {_listar_abas_texto(abas)}")
+
     sheet_name = _parse_sheet_name(args.aba)
     if args.selecionar_aba:
         _log("Selecionando aba de trabalho...")
-        if args.gui_execucao:
-            sheet_name = _escolher_aba_gui(args.arquivo)
-        else:
-            sheet_name = _escolher_aba_interativamente(args.arquivo)
+        sheet_name = _escolher_aba_interativamente(args.arquivo)
     elif sheet_name is None:
         sheet_name = 0
 
+    _log(f"Aba selecionada: {sheet_name}")
     _log(f"Carregando base: {args.arquivo}")
     if progresso:
         progresso(20, "Carregando base")
@@ -654,8 +663,10 @@ def _executar_fluxo(args: argparse.Namespace, log=None, progresso=None) -> None:
 
     if progresso:
         progresso(95, "Exportando")
-    _log(f"Exportando arquivo: {args.saida}")
+    destino_final = str(Path(args.saida).resolve())
+    _log(f"Exportando arquivo: {destino_final}")
     exportar(df, args.saida)
+    _log(f"Arquivo XLSX salvo em: {destino_final}")
 
     if progresso:
         progresso(100, "Concluído")
@@ -669,13 +680,39 @@ def _executar_com_gui(args: argparse.Namespace) -> None:
     raiz.title("Exportador SIPROG - Execução")
     raiz.geometry("900x560")
 
-    status_var = StringVar(value="Aguardando início...")
+    status_var = StringVar(value="Preparando execução...")
     progresso = ttk.Progressbar(raiz, orient="horizontal", mode="determinate", maximum=100)
     progresso.pack(fill="x", padx=12, pady=(12, 6))
     ttk.Label(raiz, textvariable=status_var).pack(anchor="w", padx=12)
 
     logs = ScrolledText(raiz, height=24, state="disabled")
     logs.pack(fill="both", expand=True, padx=12, pady=12)
+
+    def log_local(msg: str) -> None:
+        logs.configure(state="normal")
+        logs.insert(END, msg + "\n")
+        logs.see(END)
+        logs.configure(state="disabled")
+        raiz.update_idletasks()
+
+    # Pré-etapas no thread principal para evitar travamentos de GUI.
+    if args.selecionar_arquivos:
+        status_var.set("Selecionando arquivo e pasta...")
+        raiz.update_idletasks()
+        args.arquivo, args.saida = _selecionar_arquivo_e_pasta(args.saida)
+        log_local(f"Arquivo selecionado: {args.arquivo}")
+        log_local(f"Saída configurada: {Path(args.saida).resolve()}")
+
+    status_var.set("Verificando abas...")
+    raiz.update_idletasks()
+    abas = listar_abas(args.arquivo)
+    log_local(f"Abas detectadas ({len(abas)}): {_listar_abas_texto(abas)}")
+
+    if args.selecionar_aba:
+        status_var.set("Selecionando aba de trabalho...")
+        raiz.update_idletasks()
+        args.aba = _escolher_aba_gui(args.arquivo)
+        log_local(f"Aba escolhida: {args.aba}")
 
     def add_log(msg: str) -> None:
         fila.put(("log", msg))
@@ -696,10 +733,7 @@ def _executar_com_gui(args: argparse.Namespace) -> None:
             while True:
                 tipo, conteudo = fila.get_nowait()
                 if tipo == "log":
-                    logs.configure(state="normal")
-                    logs.insert(END, conteudo + "\n")
-                    logs.see(END)
-                    logs.configure(state="disabled")
+                    log_local(conteudo)
                 elif tipo == "progress":
                     valor_txt, status = conteudo.split("|", 1)
                     progresso["value"] = int(valor_txt)
