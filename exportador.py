@@ -169,12 +169,18 @@ def _somente_digitos(valor: str) -> str:
     return re.sub(r"\D+", "", str(valor))
 
 
-def _formatar_data_programacao(serie: "pd.Series") -> "pd.Series":
+def _formatar_data_serie_ddmmaaaa(serie: "pd.Series") -> "pd.Series":
     pd = _carregar_pandas()
     serie_texto = _texto(serie)
     serie_dt = pd.to_datetime(serie_texto, errors="coerce", dayfirst=True)
     formatada = serie_dt.dt.strftime("%d/%m/%Y")
     return formatada.where(~serie_dt.isna(), serie_texto.str.replace("-", "/", regex=False))
+
+
+def _formatar_data_texto_ddmmaaaa(valor: str) -> str:
+    if valor is None:
+        return ""
+    return _parse_data_param(valor, "data").strftime("%d/%m/%Y")
 
 
 def validar_colunas_essenciais(df: "pd.DataFrame") -> None:
@@ -313,7 +319,7 @@ def transformar_base(df: "pd.DataFrame", prazo_conclusao: str) -> "pd.DataFrame"
 
     # Diretos
     resultado["CAPEX/OPEX"] = "CAPEX"
-    resultado["DATA INSPEÇÃO – SOMENTE OPEX"] = data_base.loc[df_base.index]
+    resultado["DATA INSPEÇÃO – SOMENTE OPEX"] = _formatar_data_serie_ddmmaaaa(data_base.loc[df_base.index])
     resultado["NOME OBRA - SOMENTE CAPEX"] = descricao_obra.loc[df_base.index]
     resultado["STATUS SAP"] = status_sap.loc[df_base.index]
     resultado["EQUIPE"] = equipe.loc[df_base.index]
@@ -329,8 +335,8 @@ def transformar_base(df: "pd.DataFrame", prazo_conclusao: str) -> "pd.DataFrame"
     resultado["REGIONAL"] = "NORTE"
     resultado["PARCEIRA"] = "SETUP METROPOLITANA (NORTE-EXPANSAO MT/BT)"
     resultado["QUANTIDADES DIAS"] = 1
-    resultado["PRAZO CONCLUSÃO"] = prazo_conclusao
-    resultado["DATA PROGRAMAÇÃO"] = _formatar_data_programacao(data_base.loc[df_base.index])
+    resultado["PRAZO CONCLUSÃO"] = _formatar_data_texto_ddmmaaaa(prazo_conclusao)
+    resultado["DATA PROGRAMAÇÃO"] = _formatar_data_serie_ddmmaaaa(data_base.loc[df_base.index])
     resultado["ORÇAMENTO MAT."] = 0
     resultado["TIPO SERVIÇO"] = "EXPANSAO MT"
     resultado["COM RECLAMAÇÃO?"] = "NÃO"
