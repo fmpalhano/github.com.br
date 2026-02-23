@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import re
+import warnings
 from pathlib import Path
 from typing import TYPE_CHECKING, Iterable
 
@@ -86,7 +87,7 @@ def _normalizar_texto(texto: str) -> str:
     return texto
 
 
-def carregar_base(caminho: str, sheet_name: str | int | None = None) -> "pd.DataFrame":
+def carregar_base(caminho: str, sheet_name: str | int | None = 0) -> "pd.DataFrame":
     """Carrega um arquivo Excel e retorna o DataFrame da aba selecionada."""
     pd = _carregar_pandas()
 
@@ -94,7 +95,29 @@ def carregar_base(caminho: str, sheet_name: str | int | None = None) -> "pd.Data
     if not arquivo.exists():
         raise FileNotFoundError(f"Arquivo não encontrado: {arquivo}")
 
-    return pd.read_excel(arquivo, sheet_name=sheet_name)
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore",
+            category=UserWarning,
+            module=r"openpyxl\.worksheet\._reader",
+        )
+        return pd.read_excel(arquivo, sheet_name=sheet_name)
+
+
+def listar_abas(caminho: str) -> list[str]:
+    pd = _carregar_pandas()
+    arquivo = Path(caminho)
+    if not arquivo.exists():
+        raise FileNotFoundError(f"Arquivo não encontrado: {arquivo}")
+
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore",
+            category=UserWarning,
+            module=r"openpyxl\.worksheet\._reader",
+        )
+        with pd.ExcelFile(arquivo) as excel:
+            return list(excel.sheet_names)
 
 
 def _indice_colunas(df: "pd.DataFrame") -> dict[str, str]:
@@ -215,6 +238,11 @@ def construir_parser() -> argparse.ArgumentParser:
 
     parser.add_argument("--arquivo", help="Caminho do arquivo .xlsx de entrada")
     parser.add_argument("--aba", help="Nome (ou índice) da aba a ser exportada")
+    parser.add_argument(
+        "--selecionar-aba",
+        action="store_true",
+        help="Exibe uma lista para selecionar manualmente a aba de trabalho",
+    )
 
     parser.add_argument(
         "--selecionar-arquivos",
@@ -280,6 +308,28 @@ def _selecionar_arquivo_e_pasta(saida_padrao: str) -> tuple[str, str]:
     return arquivo, str(saida)
 
 
+def _escolher_aba_interativamente(caminho_arquivo: str) -> str | int:
+    abas = listar_abas(caminho_arquivo)
+    if not abas:
+        raise ExportadorErro("Nenhuma aba encontrada no arquivo selecionado.")
+
+    if len(abas) == 1:
+        print(f"Apenas uma aba encontrada. Usando automaticamente: {abas[0]}")
+        return abas[0]
+
+    print("Abas disponíveis no arquivo:")
+    for i, aba in enumerate(abas, start=1):
+        print(f"  {i}) {aba}")
+
+    while True:
+        escolha = input("Selecione o número da aba desejada: ").strip()
+        if escolha.isdigit():
+            indice = int(escolha)
+            if 1 <= indice <= len(abas):
+                return abas[indice - 1]
+        print("Opção inválida. Informe um número da lista.")
+
+
 def _validar_argumentos(args: argparse.Namespace, parser: argparse.ArgumentParser) -> None:
     if not args.arquivo and not args.selecionar_arquivos:
         parser.error("informe --arquivo ou use --selecionar-arquivos para abrir a tela de seleção")
@@ -293,7 +343,14 @@ def main() -> None:
     if args.selecionar_arquivos:
         args.arquivo, args.saida = _selecionar_arquivo_e_pasta(args.saida)
 
-    df = carregar_base(args.arquivo, sheet_name=_parse_sheet_name(args.aba))
+    sheet_name = _parse_sheet_name(args.aba)
+    if args.selecionar_aba:
+        sheet_name = _escolher_aba_interativamente(args.arquivo)
+    elif sheet_name is None:
+        # Evita retorno em dict quando o arquivo possui múltiplas abas.
+        sheet_name = 0
+
+    df = carregar_base(args.arquivo, sheet_name=sheet_name)
     df = aplicar_filtros(
         df,
         data_coluna=args.data_coluna,

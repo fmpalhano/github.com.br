@@ -26,6 +26,8 @@ Se precisar, edite as variáveis no topo do `.bat` antes de executar.
 
 - `MODO_TELA=1`: abre uma tela para escolher a planilha e a pasta de trabalho.
 - `MODO_TELA=0`: usa o caminho fixo definido em `ARQUIVO_ENTRADA`.
+- `ESCOLHER_ABA=1`: lista as abas e permite selecionar manualmente qual aba exportar.
+- `ESCOLHER_ABA=0`: usa a aba definida por `--aba` (ou a primeira aba, por padrão).
 
 > Se a janela abrir e fechar rápido no Windows: o `.bat` usa `PAUSAR_NO_FINAL=1` por padrão, então a mensagem de erro/sucesso fica visível até você pressionar uma tecla.
 
@@ -33,6 +35,7 @@ Se precisar, edite as variáveis no topo do `.bat` antes de executar.
 
 - `--arquivo`: arquivo Excel de origem (obrigatório quando `--selecionar-arquivos` não for usado).
 - `--aba`: nome ou índice da aba para leitura.
+- `--selecionar-aba`: mostra lista de abas para seleção manual durante a execução.
 - `--data-coluna`: nome da coluna de data (padrão: `DATA PROGRAMAÇÃO`).
 - `--data-inicio`: data inicial (`YYYY-MM-DD`).
 - `--data-fim`: data final (`YYYY-MM-DD`).
@@ -93,5 +96,6 @@ As colunas abaixo **sempre** são exportadas (na ordem) e devem existir na plani
 
 - O exportador valida e exige todas as colunas obrigatórias do layout SIPROG.
 - O mapeamento de colunas tolera variação de espaços e tipos de travessão (`-`, `–`, `—`).
+- Avisos visuais do `openpyxl` sobre extensões de formatação/validação são suprimidos na leitura para não poluir a execução operacional.
 - Filtros de data/status falham com erro explícito se a coluna indicada não existir.
 - O script exibe o caminho do arquivo gerado e a quantidade de registros exportados.
