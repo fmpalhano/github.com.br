@@ -245,6 +245,7 @@ def transformar_base(df: "pd.DataFrame", prazo_conclusao: str) -> "pd.DataFrame"
     pd = _carregar_pandas()
     validar_colunas_essenciais(df)
     indice = _indice_colunas(df)
+    total_entrada = len(df)
 
     data_base = _texto(_obter_serie_obrigatoria(df, indice, "DATA"))
     descricao_obra = _texto(_obter_serie_obrigatoria(df, indice, "DESCRIÇÃO OBRA"))
@@ -259,6 +260,13 @@ def transformar_base(df: "pd.DataFrame", prazo_conclusao: str) -> "pd.DataFrame"
     retorno = _texto(_obter_serie(df, indice, "RETORNO"))
     df = df.loc[retorno.str.strip() == ""].copy()
     pep_original = pep_original.loc[df.index]
+
+    if df.empty:
+        raise ExportadorErro(
+            "Nenhum registro elegível para exportação após aplicar as regras: "
+            "PEP obrigatório e RETORNO deve estar em branco. "
+            f"Registros de entrada nesta etapa: {total_entrada}."
+        )
 
     indice = _indice_colunas(df)
     data_base = _texto(_obter_serie_obrigatoria(df, indice, "DATA"))
@@ -279,6 +287,11 @@ def transformar_base(df: "pd.DataFrame", prazo_conclusao: str) -> "pd.DataFrame"
 
     linhas_validas = (data_base != "") | (descricao_obra != "") | (status_sap != "") | (equipe != "") | (pep_original != "")
     df_base = df.loc[linhas_validas].copy()
+
+    if df_base.empty:
+        raise ExportadorErro(
+            "Nenhum registro válido para transformação após aplicar os filtros da base."
+        )
 
     resultado = pd.DataFrame(index=df_base.index)
     for col in REQUIRED_COLUMNS:
@@ -375,13 +388,24 @@ def _selecionar_datas_gui(args: argparse.Namespace) -> None:
     confirmado = {"ok": False}
 
     def confirmar() -> None:
+        from tkinter import messagebox
+
         args.prazo_conclusao = entradas["prazo_conclusao"].get().strip()
         args.data_inicio = entradas["data_inicio"].get().strip() or None
         args.data_fim = entradas["data_fim"].get().strip() or None
         if not args.prazo_conclusao:
-            from tkinter import messagebox
             messagebox.showerror("Datas obrigatórias", "Preencha Prazo Conclusão.")
             return
+
+        try:
+            if args.data_inicio:
+                _parse_data_param(args.data_inicio, "--data-inicio")
+            if args.data_fim:
+                _parse_data_param(args.data_fim, "--data-fim")
+        except ExportadorErro as exc:
+            messagebox.showerror("Data inválida", str(exc))
+            return
+
         confirmado["ok"] = True
         janela.destroy()
 
@@ -493,6 +517,9 @@ def executar_gui(args: argparse.Namespace) -> None:
         try:
             executar_pipeline(args, log=log_worker, progresso=progresso)
             fila.put(("done", "ok"))
+        except ExportadorErro as exc:
+            fila.put(("log", f"Erro: {exc}"))
+            fila.put(("done", "erro"))
         except Exception:
             fila.put(("log", traceback.format_exc()))
             fila.put(("done", "erro"))
