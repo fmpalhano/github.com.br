@@ -166,7 +166,15 @@ def _texto(serie: "pd.Series") -> "pd.Series":
 
 
 def _somente_digitos(valor: str) -> str:
-    return re.sub(r"\D+", "", valor)
+    return re.sub(r"\D+", "", str(valor))
+
+
+def _formatar_data_programacao(serie: "pd.Series") -> "pd.Series":
+    pd = _carregar_pandas()
+    serie_texto = _texto(serie)
+    serie_dt = pd.to_datetime(serie_texto, errors="coerce", dayfirst=True)
+    formatada = serie_dt.dt.strftime("%d/%m/%Y")
+    return formatada.where(~serie_dt.isna(), serie_texto.str.replace("-", "/", regex=False))
 
 
 def validar_colunas_essenciais(df: "pd.DataFrame") -> None:
@@ -249,7 +257,10 @@ def transformar_base(df: "pd.DataFrame", prazo_conclusao: str) -> "pd.DataFrame"
 
     data_base = _texto(_obter_serie_obrigatoria(df, indice, "DATA"))
     descricao_obra = _texto(_obter_serie_obrigatoria(df, indice, "DESCRIÇÃO OBRA"))
-    status_sap = _texto(_obter_serie_obrigatoria(df, indice, "STATUS"))
+    if _normalizar_texto("STATUS SAP") in indice:
+        status_sap = _texto(_obter_serie(df, indice, "STATUS SAP"))
+    else:
+        status_sap = _texto(_obter_serie_obrigatoria(df, indice, "STATUS"))
     equipe = _texto(_obter_serie_obrigatoria(df, indice, "EQUIPE")).str[-12:]
     pep_original = _texto(_obter_serie_obrigatoria(df, indice, "PEP"))
 
@@ -271,7 +282,10 @@ def transformar_base(df: "pd.DataFrame", prazo_conclusao: str) -> "pd.DataFrame"
     indice = _indice_colunas(df)
     data_base = _texto(_obter_serie_obrigatoria(df, indice, "DATA"))
     descricao_obra = _texto(_obter_serie_obrigatoria(df, indice, "DESCRIÇÃO OBRA"))
-    status_sap = _texto(_obter_serie_obrigatoria(df, indice, "STATUS"))
+    if _normalizar_texto("STATUS SAP") in indice:
+        status_sap = _texto(_obter_serie(df, indice, "STATUS SAP"))
+    else:
+        status_sap = _texto(_obter_serie_obrigatoria(df, indice, "STATUS"))
     equipe = _texto(_obter_serie_obrigatoria(df, indice, "EQUIPE")).str[-12:]
 
     valor_mo = _texto(_obter_serie(df, indice, "VALOR_PROGRAMADO"))
@@ -306,16 +320,17 @@ def transformar_base(df: "pd.DataFrame", prazo_conclusao: str) -> "pd.DataFrame"
 
     # PEP/Notas somente CAPEX
     pep_valid = pep_original.loc[df_base.index]
-    resultado["NOTA PROJETO - SOMENTE CAPEX"] = pep_valid
-    resultado["NOTA CLIENTE - SOMENTE CAPEX"] = pep_valid
-    resultado["ELEMENTO PEP – SOMENTE CAPEX"] = pep_valid
+    pep_notas_numerico = pep_valid.map(_somente_digitos)
+    resultado["NOTA PROJETO - SOMENTE CAPEX"] = pep_notas_numerico
+    resultado["NOTA CLIENTE - SOMENTE CAPEX"] = pep_notas_numerico
+    resultado["ELEMENTO PEP – SOMENTE CAPEX"] = pep_notas_numerico
 
     # Fixos
     resultado["REGIONAL"] = "NORTE"
     resultado["PARCEIRA"] = "SETUP METROPOLITANA (NORTE-EXPANSAO MT/BT)"
     resultado["QUANTIDADES DIAS"] = 1
     resultado["PRAZO CONCLUSÃO"] = prazo_conclusao
-    resultado["DATA PROGRAMAÇÃO"] = data_base.loc[df_base.index]
+    resultado["DATA PROGRAMAÇÃO"] = _formatar_data_programacao(data_base.loc[df_base.index])
     resultado["ORÇAMENTO MAT."] = 0
     resultado["TIPO SERVIÇO"] = "EXPANSAO MT"
     resultado["COM RECLAMAÇÃO?"] = "NÃO"
