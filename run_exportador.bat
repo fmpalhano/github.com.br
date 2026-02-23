@@ -12,15 +12,41 @@ REM Colunas extras opcionais (alem do layout obrigatorio).
 REM Deixe vazio para exportar somente as colunas obrigatorias.
 set "COLUNAS_EXTRAS="
 
-echo Executando exportador SIPROG...
+REM Mantenha 1 para nao fechar a janela automaticamente ao final.
+set "PAUSAR_NO_FINAL=1"
+
+echo =============================================
+echo   Exportador SIPROG - Execucao de teste
+echo =============================================
+
+echo [1/3] Validando Python...
+where python >nul 2>&1
+if errorlevel 1 (
+  echo [ERRO] Python nao encontrado no PATH.
+  echo        Instale o Python e marque a opcao "Add Python to PATH".
+  goto :falha
+)
+
+echo [2/3] Executando exportador...
 python exportador.py --arquivo "%ARQUIVO_ENTRADA%" --data-inicio %DATA_INICIO% --data-fim %DATA_FIM% --status "%STATUS%" --colunas "%COLUNAS_EXTRAS%" --saida "%ARQUIVO_SAIDA%"
 
 if errorlevel 1 (
-  echo.
-  echo [ERRO] Falha na exportacao. Verifique os parametros e dependencias.
-  exit /b 1
+  echo [ERRO] Falha na exportacao. Revise parametros, colunas obrigatorias e dependencias.
+  goto :falha
 )
 
+echo [3/3] Concluido com sucesso.
+echo [OK] Arquivo gerado: %ARQUIVO_SAIDA%
+goto :fim
+
+:falha
 echo.
-echo [OK] Exportacao concluida: %ARQUIVO_SAIDA%
+echo A execucao terminou com erro.
+
+:fim
+if "%PAUSAR_NO_FINAL%"=="1" (
+  echo.
+  pause
+)
+
 endlocal

@@ -24,6 +24,8 @@ run_exportador.bat
 Ele já chama o `exportador.py` com parâmetros de exemplo (arquivo, período, status e saída).
 Se precisar, edite as variáveis no topo do `.bat` antes de executar.
 
+> Se a janela abrir e fechar rápido no Windows: o `.bat` agora usa `PAUSAR_NO_FINAL=1` por padrão, então a mensagem de erro/sucesso fica visível até você pressionar uma tecla.
+
 ## Argumentos
 
 - `--arquivo` (obrigatório): arquivo Excel de origem.
