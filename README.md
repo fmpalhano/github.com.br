@@ -65,3 +65,4 @@ Duplo clique no `.exe` (sem argumentos) agora abre automaticamente:
 - Busca resiliente da aba `PROGRAMAÇÃO_OBRAS` (normalização de acentos/case/espaços).
 - Sem integração de I.A.
 - O caminho absoluto do XLSX final é exibido nos logs.
+- O exportador **não simula dados**: se faltar coluna obrigatória da base, a execução falha com erro claro.

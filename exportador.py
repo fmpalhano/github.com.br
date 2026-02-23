@@ -72,6 +72,7 @@ REQUIRED_COLUMNS = [
 ]
 
 ESSENTIAL_COLUMNS = ["DATA", "DESCRIÇÃO OBRA", "STATUS", "EQUIPE", "PEP"]
+STRICT_SOURCE_COLUMNS = ["DATA", "DESCRIÇÃO OBRA", "STATUS", "EQUIPE", "PEP"]
 
 
 class ExportadorErro(ValueError):
@@ -141,6 +142,17 @@ def _serie_vazia(df: "pd.DataFrame") -> "pd.Series":
     return pd.Series([""] * len(df), index=df.index, dtype="object")
 
 
+
+
+def _obter_serie_obrigatoria(df: "pd.DataFrame", indice: dict[str, str], nome_coluna: str) -> "pd.Series":
+    coluna_real = indice.get(_normalizar_texto(nome_coluna))
+    if not coluna_real:
+        raise ExportadorErro(
+            f"Coluna obrigatória '{nome_coluna}' ausente na base. "
+            "Sem essa coluna o sistema não pode processar sem simular dados."
+        )
+    return df[coluna_real]
+
 def _obter_serie(df: "pd.DataFrame", indice: dict[str, str], nome_coluna: str) -> "pd.Series":
     coluna_real = indice.get(_normalizar_texto(nome_coluna))
     if not coluna_real:
@@ -158,10 +170,10 @@ def _somente_digitos(valor: str) -> str:
 
 def validar_colunas_essenciais(df: "pd.DataFrame") -> None:
     indice = _indice_colunas(df)
-    faltantes = [c for c in ESSENTIAL_COLUMNS if _normalizar_texto(c) not in indice]
+    faltantes = [c for c in STRICT_SOURCE_COLUMNS if _normalizar_texto(c) not in indice]
     if faltantes:
         raise ExportadorErro(
-            "Colunas essenciais ausentes para transformação: " + ", ".join(faltantes)
+            "Colunas essenciais ausentes para transformação (sem simulação de dados): " + ", ".join(faltantes)
         )
 
 
@@ -210,11 +222,11 @@ def transformar_base(df: "pd.DataFrame", prazo_conclusao: str, data_programacao:
     validar_colunas_essenciais(df)
     indice = _indice_colunas(df)
 
-    data_base = _texto(_obter_serie(df, indice, "DATA"))
-    descricao_obra = _texto(_obter_serie(df, indice, "DESCRIÇÃO OBRA"))
-    status_sap = _texto(_obter_serie(df, indice, "STATUS"))
-    equipe = _texto(_obter_serie(df, indice, "EQUIPE")).str[-12:]
-    pep_num = _texto(_obter_serie(df, indice, "PEP")).map(_somente_digitos)
+    data_base = _texto(_obter_serie_obrigatoria(df, indice, "DATA"))
+    descricao_obra = _texto(_obter_serie_obrigatoria(df, indice, "DESCRIÇÃO OBRA"))
+    status_sap = _texto(_obter_serie_obrigatoria(df, indice, "STATUS"))
+    equipe = _texto(_obter_serie_obrigatoria(df, indice, "EQUIPE")).str[-12:]
+    pep_num = _texto(_obter_serie_obrigatoria(df, indice, "PEP")).map(_somente_digitos)
 
     valor_mo = _texto(_obter_serie(df, indice, "VALOR_PROGRAMADO"))
     turno = _texto(_obter_serie(df, indice, "TURNO"))
