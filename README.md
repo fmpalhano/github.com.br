@@ -21,6 +21,8 @@ python exportador.py \
 run_exportador.bat
 ```
 
+No `.bat`, use `SELECIONAR_DATAS=1` para escolher as datas em janela (modo recomendado para independência operacional).
+
 ## Gerar executável (.exe)
 
 No Windows, use o script abaixo para gerar o executável com PyInstaller:
@@ -41,6 +43,7 @@ Saída esperada:
 - `--aba`: aba de leitura; se omitido, o sistema busca automaticamente `PROGRAMAÇÃO_OBRAS` ignorando acento/maiúsculas/espaços.
 - `--selecionar-arquivos`: abre janela para selecionar planilha de entrada e pasta de saída.
 - `--gui-execucao`: abre painel visual com logs em tempo real e barra de progresso.
+- `--selecionar-datas`: abre janela para escolher `prazo_conclusao`, `data_programacao`, `data_inicio` e `data_fim`.
 - `--data-coluna`: nome da coluna de data (padrão: `DATA`).
 - `--data-inicio`: data inicial (`YYYY-MM-DD`).
 - `--data-fim`: data final (`YYYY-MM-DD`).

@@ -301,10 +301,64 @@ def _selecionar_arquivo_e_pasta(saida_padrao: str) -> tuple[str, str]:
     return arquivo, str(Path(pasta) / Path(saida_padrao).name)
 
 
+def _selecionar_datas_gui(args: argparse.Namespace) -> None:
+    """Seleciona datas de programação/conclusão e filtros opcionais em janela."""
+    janela = Tk()
+    janela.title("Selecionar datas da exportação")
+    janela.geometry("520x290")
+
+    campos = [
+        ("Prazo Conclusão*", "prazo_conclusao", args.prazo_conclusao or ""),
+        ("Data Programação*", "data_programacao", args.data_programacao or ""),
+        ("Data Início (filtro opcional)", "data_inicio", args.data_inicio or ""),
+        ("Data Fim (filtro opcional)", "data_fim", args.data_fim or ""),
+    ]
+
+    entradas: dict[str, ttk.Entry] = {}
+    for i, (label, chave, valor) in enumerate(campos):
+        ttk.Label(janela, text=f"{label} (YYYY-MM-DD ou DD/MM/YYYY)").grid(row=i, column=0, sticky="w", padx=12, pady=(10 if i == 0 else 6, 0))
+        e = ttk.Entry(janela, width=34)
+        e.grid(row=i, column=1, padx=12, pady=(10 if i == 0 else 6, 0))
+        e.insert(0, valor)
+        entradas[chave] = e
+
+    confirmado = {"ok": False}
+
+    def confirmar() -> None:
+        args.prazo_conclusao = entradas["prazo_conclusao"].get().strip()
+        args.data_programacao = entradas["data_programacao"].get().strip()
+        args.data_inicio = entradas["data_inicio"].get().strip() or None
+        args.data_fim = entradas["data_fim"].get().strip() or None
+        if not args.prazo_conclusao or not args.data_programacao:
+            from tkinter import messagebox
+            messagebox.showerror("Datas obrigatórias", "Preencha Prazo Conclusão e Data Programação.")
+            return
+        confirmado["ok"] = True
+        janela.destroy()
+
+    ttk.Button(janela, text="Confirmar", command=confirmar).grid(row=6, column=0, padx=12, pady=16, sticky="w")
+    ttk.Button(janela, text="Cancelar", command=janela.destroy).grid(row=6, column=1, padx=12, pady=16, sticky="e")
+
+    janela.mainloop()
+
+    if not confirmado["ok"]:
+        raise ExportadorErro("Seleção de datas cancelada pelo usuário.")
+
+
 def executar_pipeline(args: argparse.Namespace, log=print, progresso=None) -> None:
     if args.selecionar_arquivos:
         log("Abrindo seleção de planilha e pasta...")
         args.arquivo, args.saida = _selecionar_arquivo_e_pasta(args.saida)
+
+    if args.selecionar_datas:
+        log("Abrindo seleção de datas...")
+        try:
+            _selecionar_datas_gui(args)
+        except TclError as exc:
+            raise ExportadorErro(
+                "Não foi possível abrir a seleção visual de datas neste ambiente. "
+                "Informe --prazo-conclusao e --data-programacao manualmente."
+            ) from exc
 
     if progresso:
         progresso(10, "Carregando planilha")
@@ -407,6 +461,7 @@ def construir_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--selecionar-arquivos", action="store_true", help="Seleciona arquivo/pasta via janela")
     parser.add_argument("--gui-execucao", action="store_true", help="Executa com painel de logs e progresso")
+    parser.add_argument("--selecionar-datas", action="store_true", help="Abre janela para selecionar datas obrigatórias e filtros opcionais")
 
     parser.add_argument("--data-coluna", default=DEFAULT_DATA_COLUMN)
     parser.add_argument("--data-inicio")
@@ -423,10 +478,11 @@ def construir_parser() -> argparse.ArgumentParser:
 def validar_argumentos(args: argparse.Namespace, parser: argparse.ArgumentParser) -> None:
     if not args.arquivo and not args.selecionar_arquivos:
         parser.error("informe --arquivo ou use --selecionar-arquivos")
-    if not args.prazo_conclusao:
-        parser.error("informe --prazo-conclusao")
-    if not args.data_programacao:
-        parser.error("informe --data-programacao")
+    if not args.selecionar_datas:
+        if not args.prazo_conclusao:
+            parser.error("informe --prazo-conclusao ou use --selecionar-datas")
+        if not args.data_programacao:
+            parser.error("informe --data-programacao ou use --selecionar-datas")
 
 
 def main() -> None:

@@ -7,13 +7,14 @@ set "ARQUIVO_SAIDA=exportacao_siprog_teste.xlsx"
 set "DATA_INICIO=2026-02-01"
 set "DATA_FIM=2026-02-20"
 set "STATUS=LIB/LOG"
-set "PRAZO_CONCLUSAO=31/03/2026"
-set "DATA_PROGRAMACAO=23/02/2026"
+set "PRAZO_CONCLUSAO="
+set "DATA_PROGRAMACAO="
 
 REM Controles de execucao:
 set "PAUSAR_NO_FINAL=1"
 set "MODO_TELA=1"
 set "GUI_EXECUCAO=1"
+set "SELECIONAR_DATAS=1"
 
 echo =============================================
 echo   Exportador SIPROG - Execucao de teste
@@ -29,6 +30,7 @@ if errorlevel 1 (
 echo [2/3] Executando exportador...
 set "EXTRA_FLAGS="
 if "%GUI_EXECUCAO%"=="1" set "EXTRA_FLAGS=%EXTRA_FLAGS% --gui-execucao"
+if "%SELECIONAR_DATAS%"=="1" set "EXTRA_FLAGS=%EXTRA_FLAGS% --selecionar-datas"
 
 if "%MODO_TELA%"=="1" (
   python exportador.py --selecionar-arquivos %EXTRA_FLAGS% --data-inicio %DATA_INICIO% --data-fim %DATA_FIM% --status "%STATUS%" --prazo-conclusao "%PRAZO_CONCLUSAO%" --data-programacao "%DATA_PROGRAMACAO%" --saida "%ARQUIVO_SAIDA%"
