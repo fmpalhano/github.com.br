@@ -14,6 +14,7 @@ set "COLUNAS_EXTRAS="
 
 REM Mantenha 1 para nao fechar a janela automaticamente ao final.
 set "PAUSAR_NO_FINAL=1"
+set "MODO_TELA=1"
 
 echo =============================================
 echo   Exportador SIPROG - Execucao de teste
@@ -28,7 +29,12 @@ if errorlevel 1 (
 )
 
 echo [2/3] Executando exportador...
-python exportador.py --arquivo "%ARQUIVO_ENTRADA%" --data-inicio %DATA_INICIO% --data-fim %DATA_FIM% --status "%STATUS%" --colunas "%COLUNAS_EXTRAS%" --saida "%ARQUIVO_SAIDA%"
+if "%MODO_TELA%"=="1" (
+  echo      Modo tela habilitado: selecione a planilha e a pasta de trabalho.
+  python exportador.py --selecionar-arquivos --data-inicio %DATA_INICIO% --data-fim %DATA_FIM% --status "%STATUS%" --colunas "%COLUNAS_EXTRAS%" --saida "%ARQUIVO_SAIDA%"
+) else (
+  python exportador.py --arquivo "%ARQUIVO_ENTRADA%" --data-inicio %DATA_INICIO% --data-fim %DATA_FIM% --status "%STATUS%" --colunas "%COLUNAS_EXTRAS%" --saida "%ARQUIVO_SAIDA%"
+)
 
 if errorlevel 1 (
   echo [ERRO] Falha na exportacao. Revise parametros, colunas obrigatorias e dependencias.

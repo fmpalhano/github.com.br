@@ -8,6 +8,8 @@ import re
 from pathlib import Path
 from typing import TYPE_CHECKING, Iterable
 
+from tkinter import Tk, filedialog
+
 if TYPE_CHECKING:
     import pandas as pd
 
@@ -211,8 +213,17 @@ def exportar(df: "pd.DataFrame", saida: str) -> None:
 def construir_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Exportador SIPROG")
 
-    parser.add_argument("--arquivo", required=True, help="Caminho do arquivo .xlsx de entrada")
+    parser.add_argument("--arquivo", help="Caminho do arquivo .xlsx de entrada")
     parser.add_argument("--aba", help="Nome (ou índice) da aba a ser exportada")
+
+    parser.add_argument(
+        "--selecionar-arquivos",
+        action="store_true",
+        help=(
+            "Abre uma tela para selecionar a planilha de entrada e a pasta de saída "
+            "(útil para execução operacional no Windows)"
+        ),
+    )
 
     parser.add_argument(
         "--data-coluna",
@@ -247,9 +258,40 @@ def _parse_sheet_name(sheet_name: str | None) -> str | int | None:
     return int(sheet_name) if sheet_name.isdigit() else sheet_name
 
 
+def _selecionar_arquivo_e_pasta(saida_padrao: str) -> tuple[str, str]:
+    raiz = Tk()
+    raiz.withdraw()
+    raiz.attributes("-topmost", True)
+
+    arquivo = filedialog.askopenfilename(
+        title="Selecione a planilha de entrada",
+        filetypes=[("Planilhas Excel", "*.xlsx *.xls"), ("Todos os arquivos", "*.*")],
+    )
+    if not arquivo:
+        raise ExportadorErro("Seleção cancelada: nenhuma planilha foi escolhida.")
+
+    pasta = filedialog.askdirectory(title="Selecione a pasta de trabalho (saída)")
+    if not pasta:
+        raise ExportadorErro("Seleção cancelada: nenhuma pasta de trabalho foi escolhida.")
+
+    raiz.destroy()
+
+    saida = Path(pasta) / Path(saida_padrao).name
+    return arquivo, str(saida)
+
+
+def _validar_argumentos(args: argparse.Namespace, parser: argparse.ArgumentParser) -> None:
+    if not args.arquivo and not args.selecionar_arquivos:
+        parser.error("informe --arquivo ou use --selecionar-arquivos para abrir a tela de seleção")
+
+
 def main() -> None:
     parser = construir_parser()
     args = parser.parse_args()
+    _validar_argumentos(args, parser)
+
+    if args.selecionar_arquivos:
+        args.arquivo, args.saida = _selecionar_arquivo_e_pasta(args.saida)
 
     df = carregar_base(args.arquivo, sheet_name=_parse_sheet_name(args.aba))
     df = aplicar_filtros(
