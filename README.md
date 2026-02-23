@@ -21,6 +21,20 @@ python exportador.py \
 run_exportador.bat
 ```
 
+## Gerar executável (.exe)
+
+No Windows, use o script abaixo para gerar o executável com PyInstaller:
+
+```bat
+build_exportador_exe.bat
+```
+
+Saída esperada:
+
+- `dist\exportador_siprog.exe`
+
+> Assinado por: Felipe de Moraes Palhano.
+
 ## Argumentos
 
 - `--arquivo`: arquivo Excel de origem (obrigatório quando `--selecionar-arquivos` não for usado).
