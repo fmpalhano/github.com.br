@@ -144,7 +144,8 @@ def _serie_vazia(df: "pd.DataFrame") -> "pd.Series":
 
 
 
-def _obter_serie_obrigatoria(df: "pd.DataFrame", indice: dict[str, str], nome_coluna: str) -> "pd.Series":
+
+    return re.sub(r"\D+", "", str(valor))
     coluna_real = indice.get(_normalizar_texto(nome_coluna))
     if not coluna_real:
         raise ExportadorErro(
@@ -165,7 +166,33 @@ def _texto(serie: "pd.Series") -> "pd.Series":
 
 
 def _somente_digitos(valor: str) -> str:
-    return re.sub(r"\D+", "", valor)
+    return re.sub(r"\D+", "", str(valor))
+
+
+def _formatar_data_serie_ddmmaaaa(serie: "pd.Series") -> "pd.Series":
+    pd = _carregar_pandas()
+    serie_texto = _texto(serie)
+    serie_dt = pd.to_datetime(serie_texto, errors="coerce", dayfirst=True)
+    formatada = serie_dt.dt.strftime("%d/%m/%Y")
+    return formatada.where(~serie_dt.isna(), serie_texto.str.replace("-", "/", regex=False))
+
+
+def _formatar_data_texto_ddmmaaaa(valor: str) -> str:
+    pd = _carregar_pandas()
+    if valor is None:
+        return ""
+    texto = str(valor).strip()
+    if not texto:
+        return ""
+
+    for dayfirst in (False, True):
+        try:
+            dt = pd.to_datetime(texto, errors="raise", dayfirst=dayfirst)
+            return dt.strftime("%d/%m/%Y")
+        except (TypeError, ValueError):
+            continue
+
+    return texto.replace("-", "/")
 
 
 def validar_colunas_essenciais(df: "pd.DataFrame") -> None:
@@ -175,6 +202,25 @@ def validar_colunas_essenciais(df: "pd.DataFrame") -> None:
         raise ExportadorErro(
             "Colunas essenciais ausentes para transformação (sem simulação de dados): " + ", ".join(faltantes)
         )
+
+
+
+
+def _parse_data_param(valor: str, nome_parametro: str):
+    pd = _carregar_pandas()
+    texto = str(valor).strip()
+    if not texto:
+        raise ExportadorErro(f"Parâmetro {nome_parametro} vazio.")
+
+    for dayfirst in (False, True):
+        try:
+            return pd.to_datetime(texto, errors="raise", dayfirst=dayfirst)
+        except (TypeError, ValueError):
+            continue
+
+    raise ExportadorErro(
+        f"Data inválida em {nome_parametro}: '{valor}'. Use YYYY-MM-DD ou DD/MM/YYYY."
+    )
 
 
 def aplicar_filtros(
@@ -200,11 +246,15 @@ def aplicar_filtros(
                 f"Coluna de data '{data_coluna}' não encontrada. "
                 f"Informe --data-coluna corretamente. Exemplo de colunas disponíveis: {disponiveis}"
             )
-        resultado[col_data] = pd.to_datetime(resultado[col_data], errors="coerce")
-        if data_inicio:
-            resultado = resultado[resultado[col_data] >= pd.to_datetime(data_inicio)]
-        if data_fim:
-            resultado = resultado[resultado[col_data] <= pd.to_datetime(data_fim)]
+        serie_data_filtro = pd.to_datetime(resultado[col_data], errors="coerce")
+        data_inicio_dt = _parse_data_param(data_inicio, "--data-inicio") if data_inicio else None
+        data_fim_dt = _parse_data_param(data_fim, "--data-fim") if data_fim else None
+
+        if data_inicio_dt is not None:
+            resultado = resultado[serie_data_filtro >= data_inicio_dt]
+            serie_data_filtro = serie_data_filtro.loc[resultado.index]
+        if data_fim_dt is not None:
+            resultado = resultado[serie_data_filtro <= data_fim_dt]
 
     if status:
         col_status = indice.get(_normalizar_texto(status_coluna))
@@ -217,16 +267,44 @@ def aplicar_filtros(
     return resultado
 
 
-def transformar_base(df: "pd.DataFrame", prazo_conclusao: str, data_programacao: str) -> "pd.DataFrame":
+def transformar_base(df: "pd.DataFrame", prazo_conclusao: str) -> "pd.DataFrame":
     pd = _carregar_pandas()
     validar_colunas_essenciais(df)
     indice = _indice_colunas(df)
+    total_entrada = len(df)
 
     data_base = _texto(_obter_serie_obrigatoria(df, indice, "DATA"))
     descricao_obra = _texto(_obter_serie_obrigatoria(df, indice, "DESCRIÇÃO OBRA"))
-    status_sap = _texto(_obter_serie_obrigatoria(df, indice, "STATUS"))
+    if _normalizar_texto("STATUS SAP") in indice:
+        status_sap = _texto(_obter_serie(df, indice, "STATUS SAP"))
+    else:
+        status_sap = _texto(_obter_serie_obrigatoria(df, indice, "STATUS"))
     equipe = _texto(_obter_serie_obrigatoria(df, indice, "EQUIPE")).str[-12:]
-    pep_num = _texto(_obter_serie_obrigatoria(df, indice, "PEP")).map(_somente_digitos)
+    pep_original = _texto(_obter_serie_obrigatoria(df, indice, "PEP"))
+
+    mask_pep_valido = pep_original.str.strip() != ""
+    df = df.loc[mask_pep_valido].copy()
+    pep_original = pep_original.loc[df.index]
+
+    retorno = _texto(_obter_serie(df, indice, "RETORNO"))
+    df = df.loc[retorno.str.strip() == ""].copy()
+    pep_original = pep_original.loc[df.index]
+
+    if df.empty:
+        raise ExportadorErro(
+            "Nenhum registro elegível para exportação após aplicar as regras: "
+            "PEP obrigatório e RETORNO deve estar em branco. "
+            f"Registros de entrada nesta etapa: {total_entrada}."
+        )
+
+    indice = _indice_colunas(df)
+    data_base = _texto(_obter_serie_obrigatoria(df, indice, "DATA"))
+    descricao_obra = _texto(_obter_serie_obrigatoria(df, indice, "DESCRIÇÃO OBRA"))
+    if _normalizar_texto("STATUS SAP") in indice:
+        status_sap = _texto(_obter_serie(df, indice, "STATUS SAP"))
+    else:
+        status_sap = _texto(_obter_serie_obrigatoria(df, indice, "STATUS"))
+    equipe = _texto(_obter_serie_obrigatoria(df, indice, "EQUIPE")).str[-12:]
 
     valor_mo = _texto(_obter_serie(df, indice, "VALOR_PROGRAMADO"))
     turno = _texto(_obter_serie(df, indice, "TURNO"))
@@ -239,8 +317,13 @@ def transformar_base(df: "pd.DataFrame", prazo_conclusao: str, data_programacao:
     municipio = _texto(_obter_serie(df, indice, "MUNICIPIO"))
     barramento = _texto(_obter_serie(df, indice, "BARRAMENTO/CD. EQUIPAMENTO – SOMENTE OPEX"))
 
-    linhas_validas = (data_base != "") | (descricao_obra != "") | (status_sap != "") | (equipe != "") | (pep_num != "")
+    linhas_validas = (data_base != "") | (descricao_obra != "") | (status_sap != "") | (equipe != "") | (pep_original != "")
     df_base = df.loc[linhas_validas].copy()
+
+    if df_base.empty:
+        raise ExportadorErro(
+            "Nenhum registro válido para transformação após aplicar os filtros da base."
+        )
 
     resultado = pd.DataFrame(index=df_base.index)
     for col in REQUIRED_COLUMNS:
@@ -248,23 +331,24 @@ def transformar_base(df: "pd.DataFrame", prazo_conclusao: str, data_programacao:
 
     # Diretos
     resultado["CAPEX/OPEX"] = "CAPEX"
-    resultado["DATA INSPEÇÃO – SOMENTE OPEX"] = data_base.loc[df_base.index]
+    resultado["DATA INSPEÇÃO – SOMENTE OPEX"] = _formatar_data_serie_ddmmaaaa(data_base.loc[df_base.index])
     resultado["NOME OBRA - SOMENTE CAPEX"] = descricao_obra.loc[df_base.index]
     resultado["STATUS SAP"] = status_sap.loc[df_base.index]
     resultado["EQUIPE"] = equipe.loc[df_base.index]
 
     # PEP/Notas somente CAPEX
-    pep_valid = pep_num.loc[df_base.index]
-    resultado["NOTA PROJETO - SOMENTE CAPEX"] = pep_valid
-    resultado["NOTA CLIENTE - SOMENTE CAPEX"] = pep_valid
-    resultado["ELEMENTO PEP – SOMENTE CAPEX"] = pep_valid
+    pep_valid = pep_original.loc[df_base.index]
+    pep_notas_numerico = pep_valid.map(_somente_digitos)
+    resultado["NOTA PROJETO - SOMENTE CAPEX"] = pep_notas_numerico
+    resultado["NOTA CLIENTE - SOMENTE CAPEX"] = pep_notas_numerico
+    resultado["ELEMENTO PEP – SOMENTE CAPEX"] = pep_notas_numerico
 
     # Fixos
     resultado["REGIONAL"] = "NORTE"
     resultado["PARCEIRA"] = "SETUP METROPOLITANA (NORTE-EXPANSAO MT/BT)"
     resultado["QUANTIDADES DIAS"] = 1
-    resultado["PRAZO CONCLUSÃO"] = prazo_conclusao
-    resultado["DATA PROGRAMAÇÃO"] = data_programacao
+    resultado["PRAZO CONCLUSÃO"] = _formatar_data_texto_ddmmaaaa(prazo_conclusao)
+    resultado["DATA PROGRAMAÇÃO"] = _formatar_data_serie_ddmmaaaa(data_base.loc[df_base.index])
     resultado["ORÇAMENTO MAT."] = 0
     resultado["TIPO SERVIÇO"] = "EXPANSAO MT"
     resultado["COM RECLAMAÇÃO?"] = "NÃO"
@@ -322,7 +406,6 @@ def _selecionar_datas_gui(args: argparse.Namespace) -> None:
 
     campos = [
         ("Prazo Conclusão*", "prazo_conclusao", args.prazo_conclusao or ""),
-        ("Data Programação*", "data_programacao", args.data_programacao or ""),
         ("Data Início (filtro opcional)", "data_inicio", args.data_inicio or ""),
         ("Data Fim (filtro opcional)", "data_fim", args.data_fim or ""),
     ]
@@ -338,14 +421,24 @@ def _selecionar_datas_gui(args: argparse.Namespace) -> None:
     confirmado = {"ok": False}
 
     def confirmar() -> None:
+        from tkinter import messagebox
+
         args.prazo_conclusao = entradas["prazo_conclusao"].get().strip()
-        args.data_programacao = entradas["data_programacao"].get().strip()
         args.data_inicio = entradas["data_inicio"].get().strip() or None
         args.data_fim = entradas["data_fim"].get().strip() or None
-        if not args.prazo_conclusao or not args.data_programacao:
-            from tkinter import messagebox
-            messagebox.showerror("Datas obrigatórias", "Preencha Prazo Conclusão e Data Programação.")
+        if not args.prazo_conclusao:
+            messagebox.showerror("Datas obrigatórias", "Preencha Prazo Conclusão.")
             return
+
+        try:
+            if args.data_inicio:
+                _parse_data_param(args.data_inicio, "--data-inicio")
+            if args.data_fim:
+                _parse_data_param(args.data_fim, "--data-fim")
+        except ExportadorErro as exc:
+            messagebox.showerror("Data inválida", str(exc))
+            return
+
         confirmado["ok"] = True
         janela.destroy()
 
@@ -376,7 +469,7 @@ def executar_pipeline(args: argparse.Namespace, log=print, progresso=None) -> No
         except TclError as exc:
             raise ExportadorErro(
                 "Não foi possível abrir a seleção visual de datas neste ambiente. "
-                "Informe --prazo-conclusao e --data-programacao manualmente."
+                "Informe --prazo-conclusao manualmente."
             ) from exc
 
     if progresso:
@@ -399,7 +492,7 @@ def executar_pipeline(args: argparse.Namespace, log=print, progresso=None) -> No
 
     if progresso:
         progresso(65, "Transformando")
-    df_final = transformar_base(df, args.prazo_conclusao, args.data_programacao)
+    df_final = transformar_base(df, args.prazo_conclusao)
 
     if progresso:
         progresso(90, "Exportando")
@@ -457,6 +550,9 @@ def executar_gui(args: argparse.Namespace) -> None:
         try:
             executar_pipeline(args, log=log_worker, progresso=progresso)
             fila.put(("done", "ok"))
+        except ExportadorErro as exc:
+            fila.put(("log", f"Erro: {exc}"))
+            fila.put(("done", "erro"))
         except Exception:
             fila.put(("log", traceback.format_exc()))
             fila.put(("done", "erro"))
@@ -515,9 +611,7 @@ def construir_parser() -> argparse.ArgumentParser:
 
     parser.add_argument("--saida", default=DEFAULT_OUTPUT)
     parser.add_argument("--prazo-conclusao", help="Data para preencher PRAZO CONCLUSÃO")
-    parser.add_argument("--data-programacao", help="Data para preencher DATA PROGRAMAÇÃO")
     return parser
-
 
 
 
@@ -529,15 +623,12 @@ def _aplicar_modo_autonomo_se_sem_args(args: argparse.Namespace) -> None:
     args.selecionar_arquivos = True
     args.selecionar_datas = True
     args.gui_execucao = True
-
 def validar_argumentos(args: argparse.Namespace, parser: argparse.ArgumentParser) -> None:
     if not args.arquivo and not args.selecionar_arquivos:
         parser.error("informe --arquivo ou use --selecionar-arquivos (no .exe, execute sem argumentos para abrir as telas)")
     if not args.selecionar_datas:
         if not args.prazo_conclusao:
             parser.error("informe --prazo-conclusao ou use --selecionar-datas")
-        if not args.data_programacao:
-            parser.error("informe --data-programacao ou use --selecionar-datas")
 
 
 def main() -> None:
