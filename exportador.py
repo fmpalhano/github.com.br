@@ -4,20 +4,90 @@
 from __future__ import annotations
 
 import argparse
+import re
 from pathlib import Path
-from typing import Iterable
+from typing import TYPE_CHECKING, Iterable
 
-import pandas as pd
+if TYPE_CHECKING:
+    import pandas as pd
 
 DEFAULT_OUTPUT = "exportacao_siprog.xlsx"
+DEFAULT_DATA_COLUMN = "DATA PROGRAMAÇÃO"
+DEFAULT_STATUS_COLUMN = "STATUS SAP"
+
+REQUIRED_COLUMNS = [
+    "CAPEX/OPEX",
+    "NOTA PROJETO - SOMENTE CAPEX",
+    "NOTA CLIENTE - SOMENTE CAPEX",
+    "NOME OBRA - SOMENTE CAPEX",
+    "COD. PROGRAMAÇÃO - SOMENTE OPEX",
+    "EQP. NOVO? – SOMENTE OPEX",
+    "SE / ORIGEM LTDA – SOMENTE OPEX",
+    "LOCAL INSTAL. – SOMENTE OPEX",
+    "DATA INSPEÇÃO – SOMENTE OPEX",
+    "ORDEM INSPEÇÃO – SOMENTE OPEX",
+    "PRIORIDADE – SOMENTE OPEX",
+    "CLASSE – SOMENTE OPEX",
+    "DESCRIÇÃO ANOMALIA – SOMENTE OPEX",
+    "REGIONAL",
+    "PARCEIRA",
+    "EQUIPE",
+    "REFERÊNCIA",
+    "PRAZO CONCLUSÃO",
+    "DATA PROGRAMAÇÃO",
+    "QUANTIDADES DIAS",
+    "ELEMENTO PEP – SOMENTE CAPEX",
+    "ORDEM SERVIÇO – SOMENTE OPEX",
+    "ORÇAMENTO MAT.",
+    "ORÇAMENTO MO",
+    "VALOR MÃO DE OBRA PROGRAMADA",
+    "TURNO",
+    "COM RECLAMAÇÃO?",
+    "ORIGEM RECLAMAÇÃO",
+    "TIPO SERVIÇO",
+    "TEM RESTRIÇÃO?",
+    "OBRA VALIDADA EM CAMPO?",
+    "STATUS SAP",
+    "MUNICIPIO – SOMENTE CAPEX",
+    "BAIRRO – SOMENTE CAPEX",
+    "DESCRIÇÃO PI – SOMENTE CAPEX",
+    "REGULADO ANEEL",
+    "BARRAMENTO/CD. EQUIPAMENTO – SOMENTE OPEX",
+    "TIPO INTERVENÇÃO",
+    "NÚMERO SI – SOMENTE BLOQUEIO DO ALIMENTADOR (LINHA VIVA) e DESLIGAMENTO PROGRAMADO",
+    "INICIO PREVISTO – SOMENTE DESLIGAMENTO PROGRAMADO",
+    "FINAL PREVISTO – SOMENTE DESLIGAMENTO PROGRAMADO",
+    "SERVIÇOS",
+    "OBSERVAÇÃO",
+]
 
 
 class ExportadorErro(ValueError):
     """Erro de validação para entradas do exportador."""
 
 
-def carregar_base(caminho: str, sheet_name: str | int | None = None) -> pd.DataFrame:
+def _carregar_pandas():
+    try:
+        import pandas as pd
+    except ModuleNotFoundError as exc:
+        raise ModuleNotFoundError(
+            "Dependência ausente: instale pandas e openpyxl para usar o exportador. "
+            "Exemplo: pip install pandas openpyxl"
+        ) from exc
+    return pd
+
+
+def _normalizar_texto(texto: str) -> str:
+    texto = texto.strip().upper()
+    texto = texto.replace("–", "-").replace("—", "-")
+    texto = re.sub(r"\s+", " ", texto)
+    return texto
+
+
+def carregar_base(caminho: str, sheet_name: str | int | None = None) -> "pd.DataFrame":
     """Carrega um arquivo Excel e retorna o DataFrame da aba selecionada."""
+    pd = _carregar_pandas()
+
     arquivo = Path(caminho)
     if not arquivo.exists():
         raise FileNotFoundError(f"Arquivo não encontrado: {arquivo}")
@@ -25,30 +95,85 @@ def carregar_base(caminho: str, sheet_name: str | int | None = None) -> pd.DataF
     return pd.read_excel(arquivo, sheet_name=sheet_name)
 
 
+def _indice_colunas(df: "pd.DataFrame") -> dict[str, str]:
+    indice: dict[str, str] = {}
+    for coluna in df.columns:
+        chave = _normalizar_texto(str(coluna))
+        indice.setdefault(chave, str(coluna))
+    return indice
+
+
+def _resolver_colunas(
+    indice_colunas: dict[str, str],
+    colunas_desejadas: Iterable[str],
+    obrigatorias: bool = True,
+) -> tuple[list[str], dict[str, str]]:
+    colunas_reais: list[str] = []
+    rename_map: dict[str, str] = {}
+    faltantes: list[str] = []
+
+    for coluna in colunas_desejadas:
+        chave = _normalizar_texto(coluna)
+        coluna_real = indice_colunas.get(chave)
+
+        if coluna_real is None:
+            if obrigatorias:
+                faltantes.append(coluna)
+            continue
+
+        if coluna_real not in colunas_reais:
+            colunas_reais.append(coluna_real)
+            rename_map[coluna_real] = coluna
+
+    if faltantes:
+        raise ExportadorErro(
+            "As seguintes colunas obrigatórias não existem na base: " + ", ".join(faltantes)
+        )
+
+    return colunas_reais, rename_map
+
+
 def aplicar_filtros(
-    df: pd.DataFrame,
+    df: "pd.DataFrame",
     data_coluna: str,
     data_inicio: str | None,
     data_fim: str | None,
     status_coluna: str,
     status: str | None,
-) -> pd.DataFrame:
-    """Aplica filtros de data e status quando as colunas existem."""
-    resultado = df.copy()
+) -> "pd.DataFrame":
+    """Aplica filtros de data e status."""
+    pd = _carregar_pandas()
 
-    if data_coluna in resultado.columns:
-        resultado[data_coluna] = pd.to_datetime(resultado[data_coluna], errors="coerce")
+    resultado = df.copy()
+    indice = _indice_colunas(resultado)
+
+    if data_inicio or data_fim:
+        coluna_data = indice.get(_normalizar_texto(data_coluna))
+        if not coluna_data:
+            raise ExportadorErro(
+                f"Coluna de data '{data_coluna}' não encontrada para aplicar filtro de período."
+            )
+
+        resultado[coluna_data] = pd.to_datetime(resultado[coluna_data], errors="coerce")
 
         if data_inicio:
             inicio = pd.to_datetime(data_inicio)
-            resultado = resultado[resultado[data_coluna] >= inicio]
+            resultado = resultado[resultado[coluna_data] >= inicio]
 
         if data_fim:
             fim = pd.to_datetime(data_fim)
-            resultado = resultado[resultado[data_coluna] <= fim]
+            resultado = resultado[resultado[coluna_data] <= fim]
 
-    if status and status_coluna in resultado.columns:
-        resultado = resultado[resultado[status_coluna].astype(str).str.upper() == status.upper()]
+    if status:
+        coluna_status = indice.get(_normalizar_texto(status_coluna))
+        if not coluna_status:
+            raise ExportadorErro(
+                f"Coluna de status '{status_coluna}' não encontrada para aplicar filtro de status."
+            )
+
+        resultado = resultado[
+            resultado[coluna_status].astype(str).str.upper().str.strip() == status.upper().strip()
+        ]
 
     return resultado
 
@@ -59,24 +184,22 @@ def _normalizar_colunas(colunas: str | None) -> list[str]:
     return [col.strip() for col in colunas.split(",") if col.strip()]
 
 
-def validar_colunas_solicitadas(df: pd.DataFrame, colunas: Iterable[str]) -> None:
-    faltantes = [col for col in colunas if col not in df.columns]
-    if faltantes:
-        raise ExportadorErro(
-            "As seguintes colunas não existem na base: " + ", ".join(faltantes)
-        )
+def selecionar_colunas(df: "pd.DataFrame", colunas_adicionais: str | None) -> "pd.DataFrame":
+    indice = _indice_colunas(df)
+
+    obrigatorias_reais, rename_map = _resolver_colunas(indice, REQUIRED_COLUMNS, obrigatorias=True)
+
+    adicionais = _normalizar_colunas(colunas_adicionais)
+    if adicionais:
+        extras_reais, _ = _resolver_colunas(indice, adicionais, obrigatorias=False)
+        for extra in extras_reais:
+            if extra not in obrigatorias_reais:
+                obrigatorias_reais.append(extra)
+
+    return df[obrigatorias_reais].rename(columns=rename_map)
 
 
-def selecionar_colunas(df: pd.DataFrame, colunas: str | None) -> pd.DataFrame:
-    colunas_lista = _normalizar_colunas(colunas)
-    if not colunas_lista:
-        return df
-
-    validar_colunas_solicitadas(df, colunas_lista)
-    return df[colunas_lista]
-
-
-def exportar(df: pd.DataFrame, saida: str) -> None:
+def exportar(df: "pd.DataFrame", saida: str) -> None:
     destino = Path(saida)
     destino.parent.mkdir(parents=True, exist_ok=True)
     df.to_excel(destino, index=False)
@@ -91,16 +214,27 @@ def construir_parser() -> argparse.ArgumentParser:
     parser.add_argument("--arquivo", required=True, help="Caminho do arquivo .xlsx de entrada")
     parser.add_argument("--aba", help="Nome (ou índice) da aba a ser exportada")
 
-    parser.add_argument("--data-coluna", default="Data", help="Nome da coluna de data")
+    parser.add_argument(
+        "--data-coluna",
+        default=DEFAULT_DATA_COLUMN,
+        help=f"Nome da coluna de data (padrão: {DEFAULT_DATA_COLUMN})",
+    )
     parser.add_argument("--data-inicio", help="Data inicial no formato YYYY-MM-DD")
     parser.add_argument("--data-fim", help="Data final no formato YYYY-MM-DD")
 
-    parser.add_argument("--status-coluna", default="Status", help="Nome da coluna de status")
+    parser.add_argument(
+        "--status-coluna",
+        default=DEFAULT_STATUS_COLUMN,
+        help=f"Nome da coluna de status (padrão: {DEFAULT_STATUS_COLUMN})",
+    )
     parser.add_argument("--status", help="Valor do status para filtro")
 
     parser.add_argument(
         "--colunas",
-        help="Colunas separadas por vírgula para exportação (ex: equipe,tecnico,data)",
+        help=(
+            "Colunas adicionais separadas por vírgula para incluir no final do layout padrão "
+            "(as colunas obrigatórias do SIPROG sempre serão exportadas)"
+        ),
     )
     parser.add_argument("--saida", default=DEFAULT_OUTPUT, help="Arquivo de saída .xlsx")
 
