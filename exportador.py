@@ -9,7 +9,8 @@ import warnings
 from pathlib import Path
 from typing import TYPE_CHECKING, Iterable
 
-from tkinter import Tk, filedialog
+from tkinter import Tk, Toplevel, END, StringVar, filedialog
+from tkinter import ttk
 
 if TYPE_CHECKING:
     import pandas as pd
@@ -252,6 +253,14 @@ def construir_parser() -> argparse.ArgumentParser:
             "(útil para execução operacional no Windows)"
         ),
     )
+    parser.add_argument(
+        "--gui-colunas",
+        action="store_true",
+        help=(
+            "Abre uma interface para pesquisar colunas e visualizar amostras de dados "
+            "antes da exportação"
+        ),
+    )
 
     parser.add_argument(
         "--data-coluna",
@@ -330,6 +339,93 @@ def _escolher_aba_interativamente(caminho_arquivo: str) -> str | int:
         print("Opção inválida. Informe um número da lista.")
 
 
+def _abrir_gui_colunas(df: "pd.DataFrame") -> list[str]:
+    try:
+        raiz = Tk()
+        raiz.withdraw()
+    except Exception as exc:  # pragma: no cover - depende de ambiente gráfico
+        raise ExportadorErro(
+            "Não foi possível abrir a interface gráfica de colunas neste ambiente. "
+            "Use --colunas manualmente."
+        ) from exc
+
+    janela = Toplevel(raiz)
+    janela.title("Visualização de Colunas - Exportador SIPROG")
+    janela.geometry("980x620")
+
+    ttk.Label(janela, text="Pesquisar coluna:").pack(anchor="w", padx=12, pady=(10, 2))
+
+    filtro_var = StringVar(value="")
+    entrada = ttk.Entry(janela, textvariable=filtro_var)
+    entrada.pack(fill="x", padx=12)
+
+    frame_lista = ttk.Frame(janela)
+    frame_lista.pack(fill="both", expand=True, padx=12, pady=10)
+
+    lista = ttk.Treeview(frame_lista, columns=("coluna", "amostra"), show="headings", height=16)
+    lista.heading("coluna", text="Coluna")
+    lista.heading("amostra", text="Amostra (até 3 valores não vazios)")
+    lista.column("coluna", width=340, anchor="w")
+    lista.column("amostra", width=600, anchor="w")
+
+    scroll = ttk.Scrollbar(frame_lista, orient="vertical", command=lista.yview)
+    lista.configure(yscrollcommand=scroll.set)
+
+    lista.pack(side="left", fill="both", expand=True)
+    scroll.pack(side="right", fill="y")
+
+    selecionadas: list[str] = []
+
+    colunas = [str(c) for c in df.columns]
+
+    def amostra_coluna(col: str) -> str:
+        serie = df[col].dropna().astype(str)
+        vals = []
+        for v in serie:
+            v = v.strip()
+            if not v:
+                continue
+            if v not in vals:
+                vals.append(v)
+            if len(vals) == 3:
+                break
+        return " | ".join(vals) if vals else "(sem valores não vazios)"
+
+    cache = {c: amostra_coluna(c) for c in colunas}
+
+    def preencher() -> None:
+        termo = filtro_var.get().strip().lower()
+        for iid in lista.get_children():
+            lista.delete(iid)
+        for c in colunas:
+            if termo and termo not in c.lower() and termo not in cache[c].lower():
+                continue
+            lista.insert("", END, values=(c, cache[c]))
+
+    def confirmar() -> None:
+        nonlocal selecionadas
+        selecionadas = [lista.item(iid, "values")[0] for iid in lista.selection()]
+        janela.destroy()
+
+    botoes = ttk.Frame(janela)
+    botoes.pack(fill="x", padx=12, pady=(0, 12))
+
+    ttk.Button(botoes, text="Usar colunas selecionadas", command=confirmar).pack(side="left")
+    ttk.Button(botoes, text="Continuar sem selecionar", command=janela.destroy).pack(side="left", padx=8)
+
+    filtro_var.trace_add("write", lambda *_: preencher())
+    preencher()
+    entrada.focus_set()
+
+    janela.transient(raiz)
+    janela.grab_set()
+    janela.protocol("WM_DELETE_WINDOW", janela.destroy)
+    raiz.wait_window(janela)
+    raiz.destroy()
+
+    return selecionadas
+
+
 def _validar_argumentos(args: argparse.Namespace, parser: argparse.ArgumentParser) -> None:
     if not args.arquivo and not args.selecionar_arquivos:
         parser.error("informe --arquivo ou use --selecionar-arquivos para abrir a tela de seleção")
@@ -351,6 +447,16 @@ def main() -> None:
         sheet_name = 0
 
     df = carregar_base(args.arquivo, sheet_name=sheet_name)
+
+    if args.gui_colunas:
+        colunas_gui = _abrir_gui_colunas(df)
+        if colunas_gui:
+            adicionais_gui = ",".join(colunas_gui)
+            if args.colunas:
+                args.colunas = f"{args.colunas},{adicionais_gui}"
+            else:
+                args.colunas = adicionais_gui
+
     df = aplicar_filtros(
         df,
         data_coluna=args.data_coluna,
