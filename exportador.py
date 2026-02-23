@@ -178,6 +178,25 @@ def validar_colunas_essenciais(df: "pd.DataFrame") -> None:
         )
 
 
+
+
+def _parse_data_param(valor: str, nome_parametro: str):
+    pd = _carregar_pandas()
+    texto = str(valor).strip()
+    if not texto:
+        raise ExportadorErro(f"Parâmetro {nome_parametro} vazio.")
+
+    for dayfirst in (False, True):
+        try:
+            return pd.to_datetime(texto, errors="raise", dayfirst=dayfirst)
+        except (TypeError, ValueError):
+            continue
+
+    raise ExportadorErro(
+        f"Data inválida em {nome_parametro}: '{valor}'. Use YYYY-MM-DD ou DD/MM/YYYY."
+    )
+
+
 def aplicar_filtros(
     df: "pd.DataFrame",
     data_coluna: str,
@@ -202,11 +221,14 @@ def aplicar_filtros(
                 f"Informe --data-coluna corretamente. Exemplo de colunas disponíveis: {disponiveis}"
             )
         serie_data_filtro = pd.to_datetime(resultado[col_data], errors="coerce")
-        if data_inicio:
-            resultado = resultado[serie_data_filtro >= pd.to_datetime(data_inicio)]
+        data_inicio_dt = _parse_data_param(data_inicio, "--data-inicio") if data_inicio else None
+        data_fim_dt = _parse_data_param(data_fim, "--data-fim") if data_fim else None
+
+        if data_inicio_dt is not None:
+            resultado = resultado[serie_data_filtro >= data_inicio_dt]
             serie_data_filtro = serie_data_filtro.loc[resultado.index]
-        if data_fim:
-            resultado = resultado[serie_data_filtro <= pd.to_datetime(data_fim)]
+        if data_fim_dt is not None:
+            resultado = resultado[serie_data_filtro <= data_fim_dt]
 
     if status:
         col_status = indice.get(_normalizar_texto(status_coluna))
