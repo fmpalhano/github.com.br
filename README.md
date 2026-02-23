@@ -39,6 +39,7 @@ Duplo clique no `.exe` (sem argumentos) agora abre automaticamente:
 - seleção de planilha/pasta,
 - seleção das datas obrigatórias,
 - painel de execução com logs.
+- botão `Importar novamente` reativado automaticamente ao finalizar (sucesso, erro ou cancelamento).
 
 > Assinado por: Felipe de Moraes Palhano.
 

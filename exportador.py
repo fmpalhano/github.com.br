@@ -405,13 +405,20 @@ def executar_gui(args: argparse.Namespace) -> None:
     raiz.title("Exportador SIPROG - Execução")
     raiz.geometry("900x560")
 
-    status_var = StringVar(value="Preparando...")
+    status_var = StringVar(value="Pronto para importar")
     bar = ttk.Progressbar(raiz, orient="horizontal", mode="determinate", maximum=100)
     bar.pack(fill="x", padx=12, pady=(12, 6))
     ttk.Label(raiz, textvariable=status_var).pack(anchor="w", padx=12)
 
+    frame_botoes = ttk.Frame(raiz)
+    frame_botoes.pack(fill="x", padx=12, pady=(0, 8))
+    btn_importar = ttk.Button(frame_botoes, text="Importar novamente")
+    btn_importar.pack(side="left")
+
     logs = ScrolledText(raiz, height=24, state="disabled")
     logs.pack(fill="both", expand=True, padx=12, pady=12)
+
+    em_execucao = {"valor": False}
 
     def log_local(msg: str) -> None:
         logs.configure(state="normal")
@@ -426,6 +433,14 @@ def executar_gui(args: argparse.Namespace) -> None:
     def progresso(valor: int, msg: str) -> None:
         fila.put(("progress", f"{valor}|{msg}"))
 
+    def habilitar_importar() -> None:
+        btn_importar.config(state="normal")
+        em_execucao["valor"] = False
+
+    def desabilitar_importar() -> None:
+        btn_importar.config(state="disabled")
+        em_execucao["valor"] = True
+
     def worker() -> None:
         try:
             executar_pipeline(args, log=log_worker, progresso=progresso)
@@ -433,6 +448,16 @@ def executar_gui(args: argparse.Namespace) -> None:
         except Exception:
             fila.put(("log", traceback.format_exc()))
             fila.put(("done", "erro"))
+        finally:
+            raiz.after(0, habilitar_importar)
+
+    def iniciar_importacao() -> None:
+        if em_execucao["valor"]:
+            return
+        desabilitar_importar()
+        bar["value"] = 0
+        status_var.set("Iniciando importação...")
+        threading.Thread(target=worker, daemon=True).start()
 
     def pump() -> None:
         try:
@@ -446,13 +471,13 @@ def executar_gui(args: argparse.Namespace) -> None:
                     status_var.set(msg)
                 elif tipo == "done":
                     status_var.set("Concluído com sucesso" if conteudo == "ok" else "Erro (veja logs)")
-                    return
         except Empty:
             pass
         raiz.after(120, pump)
 
-    threading.Thread(target=worker, daemon=True).start()
+    btn_importar.config(command=iniciar_importacao)
     pump()
+    iniciar_importacao()
     raiz.mainloop()
 
 
