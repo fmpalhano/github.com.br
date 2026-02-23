@@ -9,17 +9,10 @@ set "DATA_FIM=2026-02-20"
 set "STATUS=LIB/LOG"
 set "PRAZO_CONCLUSAO=31/03/2026"
 set "DATA_PROGRAMACAO=23/02/2026"
-set "LLM_MODELO=llama3.1"
-
-REM Colunas extras opcionais (alem do layout obrigatorio).
-REM Deixe vazio para exportar somente as colunas obrigatorias.
-set "COLUNAS_EXTRAS="
 
 REM Controles de execucao:
 set "PAUSAR_NO_FINAL=1"
 set "MODO_TELA=1"
-set "ESCOLHER_ABA=1"
-set "GUI_COLUNAS=0"
 set "GUI_EXECUCAO=1"
 
 echo =============================================
@@ -30,34 +23,25 @@ echo [1/3] Validando Python...
 where python >nul 2>&1
 if errorlevel 1 (
   echo [ERRO] Python nao encontrado no PATH.
-  echo        Instale o Python e marque a opcao "Add Python to PATH".
   goto :falha
 )
 
 echo [2/3] Executando exportador...
-if "%ESCOLHER_ABA%"=="1" (
-  set "EXTRA_FLAGS=--selecionar-aba"
-) else (
-  set "EXTRA_FLAGS="
-)
-
-if "%GUI_COLUNAS%"=="1" set "EXTRA_FLAGS=%EXTRA_FLAGS% --gui-colunas"
+set "EXTRA_FLAGS="
 if "%GUI_EXECUCAO%"=="1" set "EXTRA_FLAGS=%EXTRA_FLAGS% --gui-execucao"
 
 if "%MODO_TELA%"=="1" (
-  echo      Modo tela habilitado: selecione a planilha e a pasta de trabalho.
-  python exportador.py --selecionar-arquivos %EXTRA_FLAGS% --data-inicio %DATA_INICIO% --data-fim %DATA_FIM% --status "%STATUS%" --prazo-conclusao "%PRAZO_CONCLUSAO%" --data-programacao "%DATA_PROGRAMACAO%" --llm-modelo "%LLM_MODELO%" --colunas "%COLUNAS_EXTRAS%" --saida "%ARQUIVO_SAIDA%"
+  python exportador.py --selecionar-arquivos %EXTRA_FLAGS% --data-inicio %DATA_INICIO% --data-fim %DATA_FIM% --status "%STATUS%" --prazo-conclusao "%PRAZO_CONCLUSAO%" --data-programacao "%DATA_PROGRAMACAO%" --saida "%ARQUIVO_SAIDA%"
 ) else (
-  python exportador.py --arquivo "%ARQUIVO_ENTRADA%" %EXTRA_FLAGS% --data-inicio %DATA_INICIO% --data-fim %DATA_FIM% --status "%STATUS%" --prazo-conclusao "%PRAZO_CONCLUSAO%" --data-programacao "%DATA_PROGRAMACAO%" --llm-modelo "%LLM_MODELO%" --colunas "%COLUNAS_EXTRAS%" --saida "%ARQUIVO_SAIDA%"
+  python exportador.py --arquivo "%ARQUIVO_ENTRADA%" %EXTRA_FLAGS% --data-inicio %DATA_INICIO% --data-fim %DATA_FIM% --status "%STATUS%" --prazo-conclusao "%PRAZO_CONCLUSAO%" --data-programacao "%DATA_PROGRAMACAO%" --saida "%ARQUIVO_SAIDA%"
 )
 
 if errorlevel 1 (
-  echo [ERRO] Falha na exportacao. Revise parametros, colunas obrigatorias e dependencias.
+  echo [ERRO] Falha na exportacao. Revise parametros e dependencias.
   goto :falha
 )
 
 echo [3/3] Concluido com sucesso.
-echo [OK] Arquivo gerado: %ARQUIVO_SAIDA%
 goto :fim
 
 :falha
@@ -65,9 +49,5 @@ echo.
 echo A execucao terminou com erro.
 
 :fim
-if "%PAUSAR_NO_FINAL%"=="1" (
-  echo.
-  pause
-)
-
+if "%PAUSAR_NO_FINAL%"=="1" pause
 endlocal
