@@ -13,6 +13,17 @@ python exportador.py \
   --saida exportacao_siprog.xlsx
 ```
 
+## Teste rápido no Windows (.bat)
+
+Para facilitar o teste operacional, use o arquivo `run_exportador.bat`:
+
+```bat
+run_exportador.bat
+```
+
+Ele já chama o `exportador.py` com parâmetros de exemplo (arquivo, período, status e saída).
+Se precisar, edite as variáveis no topo do `.bat` antes de executar.
+
 ## Argumentos
 
 - `--arquivo` (obrigatório): arquivo Excel de origem.
