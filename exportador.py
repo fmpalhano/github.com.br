@@ -22,6 +22,7 @@ if TYPE_CHECKING:
 DEFAULT_OUTPUT = "exportacao_siprog.xlsx"
 DEFAULT_DATA_COLUMN = "DATA PROGRAMAÇÃO"
 DEFAULT_STATUS_COLUMN = "STATUS SAP"
+DEFAULT_WORKSHEET = "PROGRAMACAO_OBRAS"
 
 REQUIRED_COLUMNS = [
     "CAPEX/OPEX",
@@ -350,7 +351,7 @@ def construir_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Exportador SIPROG")
 
     parser.add_argument("--arquivo", help="Caminho do arquivo .xlsx de entrada")
-    parser.add_argument("--aba", help="Nome (ou índice) da aba a ser exportada")
+    parser.add_argument("--aba", help="Nome (ou índice) da aba a ser exportada (sobrescreve o padrão PROGRAMACAO_OBRAS)")
     parser.add_argument(
         "--selecionar-aba",
         action="store_true",
@@ -611,13 +612,19 @@ def _executar_fluxo(args: argparse.Namespace, log=None, progresso=None) -> None:
     _log(f"Abas encontradas ({len(abas)}): {_listar_abas_texto(abas)}")
 
     sheet_name = _parse_sheet_name(args.aba)
-    if args.selecionar_aba:
-        _log("Selecionando aba de trabalho...")
-        sheet_name = _escolher_aba_interativamente(args.arquivo)
-    elif sheet_name is None:
-        sheet_name = 0
+    if sheet_name is None:
+        nomes_normalizados = {_normalizar_texto(a): a for a in abas}
+        sheet_name = nomes_normalizados.get(_normalizar_texto(DEFAULT_WORKSHEET), DEFAULT_WORKSHEET)
+        if _normalizar_texto(DEFAULT_WORKSHEET) in nomes_normalizados:
+            _log(f"Aba padrão aplicada: {sheet_name}")
+        else:
+            _log(
+                f"Aba padrão '{DEFAULT_WORKSHEET}' não encontrada pelo nome exato. Tentando carregar mesmo assim."
+            )
+    else:
+        _log(f"Aba informada manualmente: {sheet_name}")
 
-    _log(f"Aba selecionada: {sheet_name}")
+    _log(f"Aba selecionada para carga: {sheet_name}")
     _log(f"Carregando base: {args.arquivo}")
     if progresso:
         progresso(20, "Carregando base")
@@ -709,10 +716,7 @@ def _executar_com_gui(args: argparse.Namespace) -> None:
     log_local(f"Abas detectadas ({len(abas)}): {_listar_abas_texto(abas)}")
 
     if args.selecionar_aba:
-        status_var.set("Selecionando aba de trabalho...")
-        raiz.update_idletasks()
-        args.aba = _escolher_aba_gui(args.arquivo)
-        log_local(f"Aba escolhida: {args.aba}")
+        log_local("Aviso: --selecionar-aba foi ignorado. O fluxo está fixado na aba PROGRAMACAO_OBRAS.")
 
     def add_log(msg: str) -> None:
         fila.put(("log", msg))

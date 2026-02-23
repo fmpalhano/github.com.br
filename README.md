@@ -106,6 +106,7 @@ As colunas abaixo **sempre** são exportadas (na ordem) e devem existir na plani
 
 ## Comportamento
 
+- A aba padrão processada é `PROGRAMACAO_OBRAS` (quando `--aba` não é informado).
 - O exportador valida e exige todas as colunas obrigatórias do layout SIPROG.
 - O mapeamento de colunas tolera variação de espaços e tipos de travessão (`-`, `–`, `—`).
 - Avisos visuais do `openpyxl` sobre extensões de formatação/validação são suprimidos na leitura para não poluir a execução operacional.
