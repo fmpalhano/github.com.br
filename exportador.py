@@ -145,7 +145,7 @@ def _serie_vazia(df: "pd.DataFrame") -> "pd.Series":
 
 
 
-def _obter_serie_obrigatoria(df: "pd.DataFrame", indice: dict[str, str], nome_coluna: str) -> "pd.Series":
+    return re.sub(r"\D+", "", str(valor))
     coluna_real = indice.get(_normalizar_texto(nome_coluna))
     if not coluna_real:
         raise ExportadorErro(
