@@ -225,6 +225,114 @@ def selecionar_colunas(df: "pd.DataFrame", colunas_adicionais: str | None) -> "p
     return df[obrigatorias_reais].rename(columns=rename_map)
 
 
+def _somente_digitos(valor: str) -> str:
+    return re.sub(r"\D+", "", valor)
+
+
+def _serie_vazia(df: "pd.DataFrame") -> "pd.Series":
+    pd = _carregar_pandas()
+    return pd.Series([""] * len(df), index=df.index, dtype="object")
+
+
+def _obter_serie(df: "pd.DataFrame", indice: dict[str, str], nome_coluna: str) -> "pd.Series":
+    coluna_real = indice.get(_normalizar_texto(nome_coluna))
+    if not coluna_real:
+        return _serie_vazia(df)
+    return df[coluna_real]
+
+
+def _normalizar_serie_texto(serie: "pd.Series") -> "pd.Series":
+    return serie.where(~serie.isna(), "").astype(str).str.strip()
+
+
+def transformar_base(
+    df: "pd.DataFrame",
+    prazo_conclusao: str,
+    data_programacao: str,
+) -> "pd.DataFrame":
+    """Transforma a base de entrada no layout padronizado de exportação."""
+    pd = _carregar_pandas()
+    indice = _indice_colunas(df)
+
+    capex_opex = _normalizar_serie_texto(_obter_serie(df, indice, "CAPEX/OPEX"))
+    status_sap = _normalizar_serie_texto(_obter_serie(df, indice, "STATUS SAP"))
+
+    descricao_obra = _normalizar_serie_texto(_obter_serie(df, indice, "DESCRIÇÃO OBRA"))
+    if not descricao_obra.any():
+        descricao_obra = _normalizar_serie_texto(_obter_serie(df, indice, "NOME OBRA - SOMENTE CAPEX"))
+
+    data_base = _normalizar_serie_texto(_obter_serie(df, indice, "DATA"))
+
+    equipe = _normalizar_serie_texto(_obter_serie(df, indice, "EQUIPE")).str[-12:]
+
+    elemento_pep = _normalizar_serie_texto(
+        _obter_serie(df, indice, "ELEMENTO PEP – SOMENTE CAPEX")
+    ).map(_somente_digitos)
+    nota_projeto = _normalizar_serie_texto(
+        _obter_serie(df, indice, "NOTA PROJETO - SOMENTE CAPEX")
+    ).map(_somente_digitos)
+    nota_cliente = _normalizar_serie_texto(
+        _obter_serie(df, indice, "NOTA CLIENTE - SOMENTE CAPEX")
+    ).map(_somente_digitos)
+
+    barramento = _normalizar_serie_texto(
+        _obter_serie(df, indice, "BARRAMENTO/CD. EQUIPAMENTO – SOMENTE OPEX")
+    )
+
+    ordem_servico = _normalizar_serie_texto(_obter_serie(df, indice, "ORDEM SERVIÇO – SOMENTE OPEX"))
+    valor_mo = _normalizar_serie_texto(_obter_serie(df, indice, "VALOR MÃO DE OBRA PROGRAMADA"))
+    turno = _normalizar_serie_texto(_obter_serie(df, indice, "TURNO"))
+    origem_reclamacao = _normalizar_serie_texto(_obter_serie(df, indice, "ORIGEM RECLAMAÇÃO"))
+    referencia = _normalizar_serie_texto(_obter_serie(df, indice, "REFERÊNCIA"))
+
+    mascara_capex = capex_opex.str.upper() == "CAPEX"
+
+    resultado = pd.DataFrame(index=df.index)
+    for coluna in REQUIRED_COLUMNS:
+        resultado[coluna] = ""
+
+    # Campos diretos / preservados
+    resultado["CAPEX/OPEX"] = capex_opex
+    resultado["STATUS SAP"] = status_sap
+    resultado["NOME OBRA - SOMENTE CAPEX"] = descricao_obra
+    resultado["DATA INSPEÇÃO – SOMENTE OPEX"] = data_base
+
+    # Regras CAPEX/OPEX para PEP/notas
+    resultado["NOTA PROJETO - SOMENTE CAPEX"] = nota_projeto.where(mascara_capex, "")
+    resultado["NOTA CLIENTE - SOMENTE CAPEX"] = nota_cliente.where(mascara_capex, "")
+    resultado["ELEMENTO PEP – SOMENTE CAPEX"] = elemento_pep.where(mascara_capex, "")
+
+    # Campos fixos
+    resultado["REGIONAL"] = "NORTE"
+    resultado["PARCEIRA"] = "SETUP METROPOLITANA (NORTE-EXPANSAO MT/BT)"
+    resultado["QUANTIDADES DIAS"] = 1
+    resultado["PRAZO CONCLUSÃO"] = prazo_conclusao
+    resultado["DATA PROGRAMAÇÃO"] = data_programacao
+    resultado["ORÇAMENTO MAT."] = 0
+    resultado["TIPO SERVIÇO"] = "EXPANSAO MT"
+    resultado["COM RECLAMAÇÃO?"] = "NÃO"
+    resultado["TEM RESTRIÇÃO?"] = "NÃO"
+    resultado["OBRA VALIDADA EM CAMPO?"] = "SIM"
+    resultado["REGULADO ANEEL"] = "SIM"
+    resultado["TIPO INTERVENÇÃO"] = "SEM NECESSIDADE DE DESLIGAMENTO"
+
+    # Regras específicas
+    resultado["MUNICIPIO – SOMENTE CAPEX"] = ""
+    resultado["BAIRRO – SOMENTE CAPEX"] = "URBANO"
+    resultado["DESCRIÇÃO PI – SOMENTE CAPEX"] = "DIF"
+    resultado["BARRAMENTO/CD. EQUIPAMENTO – SOMENTE OPEX"] = barramento
+
+    # Campos que devem manter valor original
+    resultado["EQUIPE"] = equipe
+    resultado["ORDEM SERVIÇO – SOMENTE OPEX"] = ordem_servico
+    resultado["VALOR MÃO DE OBRA PROGRAMADA"] = valor_mo
+    resultado["TURNO"] = turno
+    resultado["ORIGEM RECLAMAÇÃO"] = origem_reclamacao
+    resultado["REFERÊNCIA"] = referencia
+
+    return resultado
+
+
 def exportar(df: "pd.DataFrame", saida: str) -> None:
     destino = Path(saida)
     destino.parent.mkdir(parents=True, exist_ok=True)
@@ -285,6 +393,8 @@ def construir_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument("--saida", default=DEFAULT_OUTPUT, help="Arquivo de saída .xlsx")
+    parser.add_argument("--prazo-conclusao", help="Data para preencher PRAZO CONCLUSÃO")
+    parser.add_argument("--data-programacao", help="Data para preencher DATA PROGRAMAÇÃO")
 
     return parser
 
@@ -429,6 +539,10 @@ def _abrir_gui_colunas(df: "pd.DataFrame") -> list[str]:
 def _validar_argumentos(args: argparse.Namespace, parser: argparse.ArgumentParser) -> None:
     if not args.arquivo and not args.selecionar_arquivos:
         parser.error("informe --arquivo ou use --selecionar-arquivos para abrir a tela de seleção")
+    if not args.prazo_conclusao:
+        parser.error("informe --prazo-conclusao")
+    if not args.data_programacao:
+        parser.error("informe --data-programacao")
 
 
 def main() -> None:
@@ -464,6 +578,11 @@ def main() -> None:
         data_fim=args.data_fim,
         status_coluna=args.status_coluna,
         status=args.status,
+    )
+    df = transformar_base(
+        df,
+        prazo_conclusao=args.prazo_conclusao,
+        data_programacao=args.data_programacao,
     )
     df = selecionar_colunas(df, args.colunas)
 

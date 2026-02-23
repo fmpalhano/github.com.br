@@ -10,6 +10,8 @@ python exportador.py \
   --data-inicio 2026-02-01 \
   --data-fim 2026-02-20 \
   --status LIB/LOG \
+  --prazo-conclusao 31/03/2026 \
+  --data-programacao 23/02/2026 \
   --saida exportacao_siprog.xlsx
 ```
 
@@ -30,6 +32,8 @@ Se precisar, edite as variáveis no topo do `.bat` antes de executar.
 - `ESCOLHER_ABA=0`: usa a aba definida por `--aba` (ou a primeira aba, por padrão).
 - `GUI_COLUNAS=1`: abre uma janela para pesquisar colunas e visualizar amostras de valores.
 - `GUI_COLUNAS=0`: desativa a visualização GUI de colunas.
+- `PRAZO_CONCLUSAO`: valor usado para preencher `PRAZO CONCLUSÃO` em todas as linhas.
+- `DATA_PROGRAMACAO`: valor usado para preencher `DATA PROGRAMAÇÃO` em todas as linhas.
 
 > Se a janela abrir e fechar rápido no Windows: o `.bat` usa `PAUSAR_NO_FINAL=1` por padrão, então a mensagem de erro/sucesso fica visível até você pressionar uma tecla.
 
@@ -44,6 +48,8 @@ Se precisar, edite as variáveis no topo do `.bat` antes de executar.
 - `--data-fim`: data final (`YYYY-MM-DD`).
 - `--status-coluna`: nome da coluna de status (padrão: `STATUS SAP`).
 - `--status`: valor de status para filtrar.
+- `--prazo-conclusao`: data fixa replicada em `PRAZO CONCLUSÃO`.
+- `--data-programacao`: data fixa replicada em `DATA PROGRAMAÇÃO`.
 - `--colunas`: colunas adicionais (separadas por vírgula) para incluir no final.
 - `--saida`: caminho do arquivo final (padrão: `exportacao_siprog.xlsx`).
 
@@ -102,4 +108,5 @@ As colunas abaixo **sempre** são exportadas (na ordem) e devem existir na plani
 - Avisos visuais do `openpyxl` sobre extensões de formatação/validação são suprimidos na leitura para não poluir a execução operacional.
 - Filtros de data/status falham com erro explícito se a coluna indicada não existir.
 - A interface GUI de colunas permite localizar informações esparsas e selecionar colunas extras visualmente.
+- A transformação aplica regras de negócio para CAPEX/OPEX, campos fixos e limpeza numérica de PEP/notas antes da exportação.
 - O script exibe o caminho do arquivo gerado e a quantidade de registros exportados.
