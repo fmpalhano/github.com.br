@@ -201,11 +201,12 @@ def aplicar_filtros(
                 f"Coluna de data '{data_coluna}' não encontrada. "
                 f"Informe --data-coluna corretamente. Exemplo de colunas disponíveis: {disponiveis}"
             )
-        resultado[col_data] = pd.to_datetime(resultado[col_data], errors="coerce")
+        serie_data_filtro = pd.to_datetime(resultado[col_data], errors="coerce")
         if data_inicio:
-            resultado = resultado[resultado[col_data] >= pd.to_datetime(data_inicio)]
+            resultado = resultado[serie_data_filtro >= pd.to_datetime(data_inicio)]
+            serie_data_filtro = serie_data_filtro.loc[resultado.index]
         if data_fim:
-            resultado = resultado[resultado[col_data] <= pd.to_datetime(data_fim)]
+            resultado = resultado[serie_data_filtro <= pd.to_datetime(data_fim)]
 
     if status:
         col_status = indice.get(_normalizar_texto(status_coluna))
