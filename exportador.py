@@ -142,10 +142,7 @@ def _serie_vazia(df: "pd.DataFrame") -> "pd.Series":
     return pd.Series([""] * len(df), index=df.index, dtype="object")
 
 
-
-
-
-    return re.sub(r"\D+", "", str(valor))
+def _obter_serie_obrigatoria(df: "pd.DataFrame", indice: dict[str, str], nome_coluna: str) -> "pd.Series":
     coluna_real = indice.get(_normalizar_texto(nome_coluna))
     if not coluna_real:
         raise ExportadorErro(
@@ -153,6 +150,7 @@ def _serie_vazia(df: "pd.DataFrame") -> "pd.Series":
             "Sem essa coluna o sistema não pode processar sem simular dados."
         )
     return df[coluna_real]
+
 
 def _obter_serie(df: "pd.DataFrame", indice: dict[str, str], nome_coluna: str) -> "pd.Series":
     coluna_real = indice.get(_normalizar_texto(nome_coluna))
@@ -172,27 +170,30 @@ def _somente_digitos(valor: str) -> str:
 def _formatar_data_serie_ddmmaaaa(serie: "pd.Series") -> "pd.Series":
     pd = _carregar_pandas()
     serie_texto = _texto(serie)
-    serie_dt = pd.to_datetime(serie_texto, errors="coerce", dayfirst=True)
+    serie_dt = pd.to_datetime(serie_texto, errors="coerce", format="%d/%m/%Y")
+    invalidas = (serie_texto != "") & serie_dt.isna()
+    if invalidas.any():
+        primeira_invalida = serie_texto[invalidas].iloc[0]
+        raise ExportadorErro(
+            f"Data inválida encontrada na base: '{primeira_invalida}'. Use exclusivamente DD/MM/AAAA."
+        )
     formatada = serie_dt.dt.strftime("%d/%m/%Y")
-    return formatada.where(~serie_dt.isna(), serie_texto.str.replace("-", "/", regex=False))
+    return formatada.where(~serie_dt.isna(), "")
 
 
 def _formatar_data_texto_ddmmaaaa(valor: str) -> str:
-    pd = _carregar_pandas()
     if valor is None:
         return ""
     texto = str(valor).strip()
     if not texto:
         return ""
 
-    for dayfirst in (False, True):
-        try:
-            dt = pd.to_datetime(texto, errors="raise", dayfirst=dayfirst)
-            return dt.strftime("%d/%m/%Y")
-        except (TypeError, ValueError):
-            continue
-
-    return texto.replace("-", "/")
+    try:
+        return _parse_data_param(texto, "data").strftime("%d/%m/%Y")
+    except ExportadorErro:
+        raise ExportadorErro(
+            f"Data inválida: '{valor}'. Use exclusivamente o formato DD/MM/AAAA."
+        ) from None
 
 
 def validar_colunas_essenciais(df: "pd.DataFrame") -> None:
@@ -212,14 +213,18 @@ def _parse_data_param(valor: str, nome_parametro: str):
     if not texto:
         raise ExportadorErro(f"Parâmetro {nome_parametro} vazio.")
 
-    for dayfirst in (False, True):
-        try:
-            return pd.to_datetime(texto, errors="raise", dayfirst=dayfirst)
-        except (TypeError, ValueError):
-            continue
+    if not re.fullmatch(r"\d{2}/\d{2}/\d{4}", texto):
+        raise ExportadorErro(
+            f"Data inválida em {nome_parametro}: '{valor}'. Use exclusivamente DD/MM/AAAA."
+        )
+
+    try:
+        return pd.to_datetime(texto, format="%d/%m/%Y", errors="raise")
+    except (TypeError, ValueError):
+        pass
 
     raise ExportadorErro(
-        f"Data inválida em {nome_parametro}: '{valor}'. Use YYYY-MM-DD ou DD/MM/YYYY."
+        f"Data inválida em {nome_parametro}: '{valor}'. Use exclusivamente DD/MM/AAAA."
     )
 
 
@@ -412,7 +417,7 @@ def _selecionar_datas_gui(args: argparse.Namespace) -> None:
 
     entradas: dict[str, ttk.Entry] = {}
     for i, (label, chave, valor) in enumerate(campos):
-        ttk.Label(janela, text=f"{label} (YYYY-MM-DD ou DD/MM/YYYY)").grid(row=i, column=0, sticky="w", padx=12, pady=(10 if i == 0 else 6, 0))
+        ttk.Label(janela, text=f"{label} (DD/MM/AAAA)").grid(row=i, column=0, sticky="w", padx=12, pady=(10 if i == 0 else 6, 0))
         e = ttk.Entry(janela, width=34)
         e.grid(row=i, column=1, padx=12, pady=(10 if i == 0 else 6, 0))
         e.insert(0, valor)
