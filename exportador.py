@@ -178,9 +178,21 @@ def _formatar_data_serie_ddmmaaaa(serie: "pd.Series") -> "pd.Series":
 
 
 def _formatar_data_texto_ddmmaaaa(valor: str) -> str:
+    pd = _carregar_pandas()
     if valor is None:
         return ""
-    return _parse_data_param(valor, "data").strftime("%d/%m/%Y")
+    texto = str(valor).strip()
+    if not texto:
+        return ""
+
+    for dayfirst in (False, True):
+        try:
+            dt = pd.to_datetime(texto, errors="raise", dayfirst=dayfirst)
+            return dt.strftime("%d/%m/%Y")
+        except (TypeError, ValueError):
+            continue
+
+    return texto.replace("-", "/")
 
 
 def validar_colunas_essenciais(df: "pd.DataFrame") -> None:
