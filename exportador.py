@@ -130,7 +130,13 @@ def carregar_base(arquivo: str, nome_aba: str) -> "pd.DataFrame":
         df = list(df.values())[0]
 
     df.columns = [str(c).strip() for c in df.columns]
-    return df.fillna("")
+    df = df.fillna("")
+
+    mask_linhas_vazias = df.apply(lambda linha: linha.astype(str).str.strip().eq("").all(), axis=1)
+    if mask_linhas_vazias.any():
+        df = df.loc[~mask_linhas_vazias].copy()
+
+    return df
 
 
 def _indice_colunas(df: "pd.DataFrame") -> dict[str, str]:
@@ -142,10 +148,7 @@ def _serie_vazia(df: "pd.DataFrame") -> "pd.Series":
     return pd.Series([""] * len(df), index=df.index, dtype="object")
 
 
-
-
-
-    return re.sub(r"\D+", "", str(valor))
+def _obter_serie_obrigatoria(df: "pd.DataFrame", indice: dict[str, str], nome_coluna: str) -> "pd.Series":
     coluna_real = indice.get(_normalizar_texto(nome_coluna))
     if not coluna_real:
         raise ExportadorErro(
@@ -153,6 +156,7 @@ def _serie_vazia(df: "pd.DataFrame") -> "pd.Series":
             "Sem essa coluna o sistema não pode processar sem simular dados."
         )
     return df[coluna_real]
+
 
 def _obter_serie(df: "pd.DataFrame", indice: dict[str, str], nome_coluna: str) -> "pd.Series":
     coluna_real = indice.get(_normalizar_texto(nome_coluna))
@@ -172,27 +176,58 @@ def _somente_digitos(valor: str) -> str:
 def _formatar_data_serie_ddmmaaaa(serie: "pd.Series") -> "pd.Series":
     pd = _carregar_pandas()
     serie_texto = _texto(serie)
-    serie_dt = pd.to_datetime(serie_texto, errors="coerce", dayfirst=True)
+    serie_norm = serie_texto.str.replace(".", "/", regex=False).str.replace("-", "/", regex=False)
+
+    serie_dt = pd.Series(pd.NaT, index=serie.index, dtype="datetime64[ns]")
+
+    mask_ymd = serie_norm.str.match(r"^\d{4}/\d{1,2}/\d{1,2}$")
+    if mask_ymd.any():
+        serie_dt.loc[mask_ymd] = pd.to_datetime(serie_norm.loc[mask_ymd], format="%Y/%m/%d", errors="coerce")
+
+    mask_dmy = serie_norm.str.match(r"^\d{1,2}/\d{1,2}/\d{4}$")
+    mask_dmy_pendente = mask_dmy & serie_dt.isna()
+    if mask_dmy_pendente.any():
+        serie_dt.loc[mask_dmy_pendente] = pd.to_datetime(
+            serie_norm.loc[mask_dmy_pendente], format="%d/%m/%Y", errors="coerce"
+        )
+
+    mask_restante = serie_dt.isna()
+    if mask_restante.any():
+        serie_dt.loc[mask_restante] = pd.to_datetime(serie.loc[mask_restante], errors="coerce", dayfirst=True)
+
     formatada = serie_dt.dt.strftime("%d/%m/%Y")
-    return formatada.where(~serie_dt.isna(), serie_texto.str.replace("-", "/", regex=False))
+    return formatada.where(~serie_dt.isna(), serie_norm)
 
 
 def _formatar_data_texto_ddmmaaaa(valor: str) -> str:
     pd = _carregar_pandas()
     if valor is None:
         return ""
+
     texto = str(valor).strip()
     if not texto:
         return ""
 
-    for dayfirst in (False, True):
+    texto_norm = texto.replace(".", "/").replace("-", "/")
+
+    if re.match(r"^\d{4}/\d{1,2}/\d{1,2}$", texto_norm):
+        dt = pd.to_datetime(texto_norm, format="%Y/%m/%d", errors="coerce")
+        if not pd.isna(dt):
+            return dt.strftime("%d/%m/%Y")
+
+    if re.match(r"^\d{1,2}/\d{1,2}/\d{4}$", texto_norm):
+        dt = pd.to_datetime(texto_norm, format="%d/%m/%Y", errors="coerce")
+        if not pd.isna(dt):
+            return dt.strftime("%d/%m/%Y")
+
+    for dayfirst in (True, False):
         try:
             dt = pd.to_datetime(texto, errors="raise", dayfirst=dayfirst)
             return dt.strftime("%d/%m/%Y")
         except (TypeError, ValueError):
             continue
 
-    return texto.replace("-", "/")
+    return texto_norm
 
 
 def validar_colunas_essenciais(df: "pd.DataFrame") -> None:
@@ -202,7 +237,6 @@ def validar_colunas_essenciais(df: "pd.DataFrame") -> None:
         raise ExportadorErro(
             "Colunas essenciais ausentes para transformação (sem simulação de dados): " + ", ".join(faltantes)
         )
-
 
 
 
@@ -341,7 +375,7 @@ def transformar_base(df: "pd.DataFrame", prazo_conclusao: str) -> "pd.DataFrame"
     pep_notas_numerico = pep_valid.map(_somente_digitos)
     resultado["NOTA PROJETO - SOMENTE CAPEX"] = pep_notas_numerico
     resultado["NOTA CLIENTE - SOMENTE CAPEX"] = pep_notas_numerico
-    resultado["ELEMENTO PEP – SOMENTE CAPEX"] = pep_notas_numerico
+    resultado["ELEMENTO PEP – SOMENTE CAPEX"] = pep_valid
 
     # Fixos
     resultado["REGIONAL"] = "NORTE"
@@ -601,7 +635,11 @@ def construir_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--selecionar-arquivos", action="store_true", help="Seleciona arquivo/pasta via janela")
     parser.add_argument("--gui-execucao", action="store_true", help="Executa com painel de logs e progresso")
-    parser.add_argument("--selecionar-datas", action="store_true", help="Abre janela para selecionar datas obrigatórias e filtros opcionais")
+    parser.add_argument(
+        "--selecionar-datas",
+        action="store_true",
+        help="Abre janela para selecionar datas obrigatórias e filtros opcionais",
+    )
 
     parser.add_argument("--data-coluna", default=DEFAULT_DATA_COLUMN)
     parser.add_argument("--data-inicio")
@@ -623,9 +661,13 @@ def _aplicar_modo_autonomo_se_sem_args(args: argparse.Namespace) -> None:
     args.selecionar_arquivos = True
     args.selecionar_datas = True
     args.gui_execucao = True
+
+
 def validar_argumentos(args: argparse.Namespace, parser: argparse.ArgumentParser) -> None:
     if not args.arquivo and not args.selecionar_arquivos:
-        parser.error("informe --arquivo ou use --selecionar-arquivos (no .exe, execute sem argumentos para abrir as telas)")
+        parser.error(
+            "informe --arquivo ou use --selecionar-arquivos (no .exe, execute sem argumentos para abrir as telas)"
+        )
     if not args.selecionar_datas:
         if not args.prazo_conclusao:
             parser.error("informe --prazo-conclusao ou use --selecionar-datas")
