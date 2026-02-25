@@ -130,18 +130,7 @@ def carregar_base(arquivo: str, nome_aba: str) -> "pd.DataFrame":
         df = list(df.values())[0]
 
     df.columns = [str(c).strip() for c in df.columns]
-    df = df.fillna("")
-
-    colunas_nome_validas = [
-        c for c in df.columns if c and not _normalizar_texto(c).startswith("UNNAMED:")
-    ]
-    df = df[colunas_nome_validas]
-
-    colunas_sem_conteudo = [c for c in df.columns if _texto(df[c]).eq("").all()]
-    if colunas_sem_conteudo:
-        df = df.drop(columns=colunas_sem_conteudo)
-
-    return df
+    return df.fillna("")
 
 
 def _indice_colunas(df: "pd.DataFrame") -> dict[str, str]:
