@@ -142,10 +142,7 @@ def _serie_vazia(df: "pd.DataFrame") -> "pd.Series":
     return pd.Series([""] * len(df), index=df.index, dtype="object")
 
 
-
-
-
-    return re.sub(r"\D+", "", str(valor))
+def _obter_serie_obrigatoria(df: "pd.DataFrame", indice: dict[str, str], nome_coluna: str) -> "pd.Series":
     coluna_real = indice.get(_normalizar_texto(nome_coluna))
     if not coluna_real:
         raise ExportadorErro(
@@ -153,6 +150,7 @@ def _serie_vazia(df: "pd.DataFrame") -> "pd.Series":
             "Sem essa coluna o sistema não pode processar sem simular dados."
         )
     return df[coluna_real]
+
 
 def _obter_serie(df: "pd.DataFrame", indice: dict[str, str], nome_coluna: str) -> "pd.Series":
     coluna_real = indice.get(_normalizar_texto(nome_coluna))
@@ -202,7 +200,6 @@ def validar_colunas_essenciais(df: "pd.DataFrame") -> None:
         raise ExportadorErro(
             "Colunas essenciais ausentes para transformação (sem simulação de dados): " + ", ".join(faltantes)
         )
-
 
 
 
@@ -601,7 +598,11 @@ def construir_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--selecionar-arquivos", action="store_true", help="Seleciona arquivo/pasta via janela")
     parser.add_argument("--gui-execucao", action="store_true", help="Executa com painel de logs e progresso")
-    parser.add_argument("--selecionar-datas", action="store_true", help="Abre janela para selecionar datas obrigatórias e filtros opcionais")
+    parser.add_argument(
+        "--selecionar-datas",
+        action="store_true",
+        help="Abre janela para selecionar datas obrigatórias e filtros opcionais",
+    )
 
     parser.add_argument("--data-coluna", default=DEFAULT_DATA_COLUMN)
     parser.add_argument("--data-inicio")
@@ -623,9 +624,13 @@ def _aplicar_modo_autonomo_se_sem_args(args: argparse.Namespace) -> None:
     args.selecionar_arquivos = True
     args.selecionar_datas = True
     args.gui_execucao = True
+
+
 def validar_argumentos(args: argparse.Namespace, parser: argparse.ArgumentParser) -> None:
     if not args.arquivo and not args.selecionar_arquivos:
-        parser.error("informe --arquivo ou use --selecionar-arquivos (no .exe, execute sem argumentos para abrir as telas)")
+        parser.error(
+            "informe --arquivo ou use --selecionar-arquivos (no .exe, execute sem argumentos para abrir as telas)"
+        )
     if not args.selecionar_datas:
         if not args.prazo_conclusao:
             parser.error("informe --prazo-conclusao ou use --selecionar-datas")
