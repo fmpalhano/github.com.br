@@ -170,27 +170,58 @@ def _somente_digitos(valor: str) -> str:
 def _formatar_data_serie_ddmmaaaa(serie: "pd.Series") -> "pd.Series":
     pd = _carregar_pandas()
     serie_texto = _texto(serie)
-    serie_dt = pd.to_datetime(serie_texto, errors="coerce", dayfirst=True)
+    serie_norm = serie_texto.str.replace(".", "/", regex=False).str.replace("-", "/", regex=False)
+
+    serie_dt = pd.Series(pd.NaT, index=serie.index, dtype="datetime64[ns]")
+
+    mask_ymd = serie_norm.str.match(r"^\d{4}/\d{1,2}/\d{1,2}$")
+    if mask_ymd.any():
+        serie_dt.loc[mask_ymd] = pd.to_datetime(serie_norm.loc[mask_ymd], format="%Y/%m/%d", errors="coerce")
+
+    mask_dmy = serie_norm.str.match(r"^\d{1,2}/\d{1,2}/\d{4}$")
+    mask_dmy_pendente = mask_dmy & serie_dt.isna()
+    if mask_dmy_pendente.any():
+        serie_dt.loc[mask_dmy_pendente] = pd.to_datetime(
+            serie_norm.loc[mask_dmy_pendente], format="%d/%m/%Y", errors="coerce"
+        )
+
+    mask_restante = serie_dt.isna()
+    if mask_restante.any():
+        serie_dt.loc[mask_restante] = pd.to_datetime(serie.loc[mask_restante], errors="coerce", dayfirst=True)
+
     formatada = serie_dt.dt.strftime("%d/%m/%Y")
-    return formatada.where(~serie_dt.isna(), serie_texto.str.replace("-", "/", regex=False))
+    return formatada.where(~serie_dt.isna(), serie_norm)
 
 
 def _formatar_data_texto_ddmmaaaa(valor: str) -> str:
     pd = _carregar_pandas()
     if valor is None:
         return ""
+
     texto = str(valor).strip()
     if not texto:
         return ""
 
-    for dayfirst in (False, True):
+    texto_norm = texto.replace(".", "/").replace("-", "/")
+
+    if re.match(r"^\d{4}/\d{1,2}/\d{1,2}$", texto_norm):
+        dt = pd.to_datetime(texto_norm, format="%Y/%m/%d", errors="coerce")
+        if not pd.isna(dt):
+            return dt.strftime("%d/%m/%Y")
+
+    if re.match(r"^\d{1,2}/\d{1,2}/\d{4}$", texto_norm):
+        dt = pd.to_datetime(texto_norm, format="%d/%m/%Y", errors="coerce")
+        if not pd.isna(dt):
+            return dt.strftime("%d/%m/%Y")
+
+    for dayfirst in (True, False):
         try:
             dt = pd.to_datetime(texto, errors="raise", dayfirst=dayfirst)
             return dt.strftime("%d/%m/%Y")
         except (TypeError, ValueError):
             continue
 
-    return texto.replace("-", "/")
+    return texto_norm
 
 
 def validar_colunas_essenciais(df: "pd.DataFrame") -> None:
@@ -338,7 +369,7 @@ def transformar_base(df: "pd.DataFrame", prazo_conclusao: str) -> "pd.DataFrame"
     pep_notas_numerico = pep_valid.map(_somente_digitos)
     resultado["NOTA PROJETO - SOMENTE CAPEX"] = pep_notas_numerico
     resultado["NOTA CLIENTE - SOMENTE CAPEX"] = pep_notas_numerico
-    resultado["ELEMENTO PEP – SOMENTE CAPEX"] = pep_notas_numerico
+    resultado["ELEMENTO PEP – SOMENTE CAPEX"] = pep_valid
 
     # Fixos
     resultado["REGIONAL"] = "NORTE"
