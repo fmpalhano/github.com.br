@@ -2,6 +2,7 @@ import json
 import os
 import random
 import time
+from concurrent import futures
 from urllib import error, request
 from urllib.parse import urlparse
 from dataclasses import dataclass
@@ -33,7 +34,8 @@ class SystemConfig:
     ENABLE_LLM = os.getenv("GOETIA_ENABLE_LLM", "1") == "1"
     OLLAMA_URL = os.getenv("GOETIA_OLLAMA_URL", "http://127.0.0.1:11434")
     OLLAMA_MODEL = os.getenv("GOETIA_MODEL", "deepseek v3:1671b-cloud")
-    OLLAMA_TIMEOUT_S = int(os.getenv("GOETIA_OLLAMA_TIMEOUT", "180"))
+    # Limite rígido para evitar sensação de travamento durante chamadas ao modelo.
+    OLLAMA_TIMEOUT_S = 40
     OLLAMA_HEALTH_URL = os.getenv("GOETIA_OLLAMA_HEALTH_URL", "http://127.0.0.1:11434/api/tags")
     LLM_DEBUG_LOG = Path(os.getenv("GOETIA_LLM_LOG", "goetia_llm.log"))
 
@@ -408,6 +410,68 @@ class GoeticChatSystem:
         self._load_session()
         self._auto_select_model()
 
+    def _timing_feedback(self, elapsed: int, model: str) -> str:
+        phrases = [
+            "Estabelecendo conexão com o outro lado...",
+            "O mundo espiritual está difícil de ser acessado...",
+            "Traçando selo de comunicação no éter...",
+            "Canal infernal em alinhamento ritualístico...",
+            "Mantendo o portal estável, aguarde...",
+        ]
+        phrase = phrases[(elapsed // 2) % len(phrases)]
+        status = f"[LLM {elapsed:02d}s/{SystemConfig.OLLAMA_TIMEOUT_S}s | modelo: {model}] {phrase}"
+        print(status)
+        self._log_llm(status)
+        return status
+
+    def _perform_ollama_request(
+        self,
+        endpoint: str,
+        payload: Dict[str, Any],
+        model_name: str,
+    ) -> Tuple[Optional[str], Optional[str], bool]:
+        data = json.dumps(payload).encode("utf-8")
+        req = request.Request(
+            endpoint,
+            data=data,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+
+        def _call_api() -> Dict[str, Any]:
+            with request.urlopen(req, timeout=SystemConfig.OLLAMA_TIMEOUT_S) as resp:
+                body = resp.read().decode("utf-8")
+                return json.loads(body)
+
+        with futures.ThreadPoolExecutor(max_workers=1) as executor:
+            future = executor.submit(_call_api)
+            elapsed = 0
+            while not future.done() and elapsed < SystemConfig.OLLAMA_TIMEOUT_S:
+                self._timing_feedback(elapsed, model_name)
+                time.sleep(1)
+                elapsed += 1
+
+            if not future.done():
+                future.cancel()
+                timeout_msg = f"timeout ao chamar {model_name} após {SystemConfig.OLLAMA_TIMEOUT_S}s"
+                self._log_llm(timeout_msg)
+                return None, timeout_msg, False
+
+            try:
+                parsed = future.result()
+                text = (parsed.get("message", {}).get("content", "") or "").strip()
+                if text:
+                    return text, None, False
+                return None, f"resposta vazia com modelo {model_name}", False
+            except error.HTTPError as exc:
+                detail = exc.read().decode("utf-8", errors="ignore").strip()
+                not_found = exc.code == 404 and "not found" in detail.lower() and "model" in detail.lower()
+                return None, f"HTTP {exc.code} em {model_name}: {detail[:200]}", not_found
+            except TimeoutError:
+                return None, f"timeout ao chamar {model_name}", False
+            except Exception as exc:
+                return None, f"{type(exc).__name__} em {model_name}: {exc}", False
+
     def _serialize(self) -> Dict[str, Any]:
         return {
             "active_demon": self.active_demon,
@@ -576,37 +640,18 @@ class GoeticChatSystem:
                 "options": {"temperature": 0.8, "top_p": 0.9},
             }
 
-            data = json.dumps(payload).encode("utf-8")
-            req = request.Request(
-                endpoint,
-                data=data,
-                headers={"Content-Type": "application/json"},
-                method="POST",
-            )
-            try:
-                with request.urlopen(req, timeout=SystemConfig.OLLAMA_TIMEOUT_S) as resp:
-                    parsed = json.loads(resp.read().decode("utf-8"))
-                    text = (parsed.get("message", {}).get("content", "") or "").strip()
-                    if text:
-                        self.last_llm_error = "nenhum"
-                        self._log_llm(
-                            f"RES#{self.llm_request_count} ok model={candidate_model} chars={len(text)}"
-                        )
-                        return text
-                    last_error = f"resposta vazia com modelo {candidate_model}"
-                    self._log_llm(f"RES#{self.llm_request_count} vazia model={candidate_model}")
-            except error.HTTPError as exc:
-                detail = exc.read().decode("utf-8", errors="ignore").strip()
-                detail_lower = detail.lower()
-                if exc.code == 404 and "not found" in detail_lower and "model" in detail_lower:
-                    seen_not_found.append(candidate_model)
-                last_error = f"HTTP {exc.code} em {candidate_model}: {detail[:200]}"
-                self._log_llm(f"ERR#{self.llm_request_count} {last_error}")
-            except TimeoutError:
-                last_error = f"timeout ao chamar {candidate_model}"
-                self._log_llm(f"ERR#{self.llm_request_count} {last_error}")
-            except Exception as exc:
-                last_error = f"{type(exc).__name__} em {candidate_model}: {exc}"
+            text, err_msg, not_found = self._perform_ollama_request(endpoint, payload, candidate_model)
+            if text:
+                self.last_llm_error = "nenhum"
+                self._log_llm(
+                    f"RES#{self.llm_request_count} ok model={candidate_model} chars={len(text)}"
+                )
+                return text
+
+            if not_found:
+                seen_not_found.append(candidate_model)
+            if err_msg:
+                last_error = err_msg
                 self._log_llm(f"ERR#{self.llm_request_count} {last_error}")
 
         fallback_model, installed = self._best_installed_model_fallback()
@@ -620,27 +665,17 @@ class GoeticChatSystem:
                 "stream": False,
                 "options": {"temperature": 0.8, "top_p": 0.9},
             }
-            data = json.dumps(payload).encode("utf-8")
-            req = request.Request(
-                endpoint,
-                data=data,
-                headers={"Content-Type": "application/json"},
-                method="POST",
-            )
-            try:
-                with request.urlopen(req, timeout=SystemConfig.OLLAMA_TIMEOUT_S) as resp:
-                    parsed = json.loads(resp.read().decode("utf-8"))
-                    text = (parsed.get("message", {}).get("content", "") or "").strip()
-                    if text:
-                        self.last_llm_error = (
-                            f"modelo configurado não instalado ({', '.join(seen_not_found)}); usando fallback automático: {fallback_model}"
-                        )
-                        self._log_llm(
-                            f"RES#{self.llm_request_count} fallback_model={fallback_model} chars={len(text)}"
-                        )
-                        return text
-            except Exception as exc:
-                last_error = f"fallback {fallback_model} falhou: {exc}"
+            text, err_msg, _ = self._perform_ollama_request(endpoint, payload, fallback_model)
+            if text:
+                self.last_llm_error = (
+                    f"modelo configurado não instalado ({', '.join(seen_not_found)}); usando fallback automático: {fallback_model}"
+                )
+                self._log_llm(
+                    f"RES#{self.llm_request_count} fallback_model={fallback_model} chars={len(text)}"
+                )
+                return text
+            if err_msg:
+                last_error = f"fallback {fallback_model} falhou: {err_msg}"
                 self._log_llm(f"ERR#{self.llm_request_count} {last_error}")
 
         if seen_not_found:
