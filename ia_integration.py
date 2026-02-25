@@ -2,7 +2,8 @@ import json
 import os
 import random
 import time
-from concurrent import futures
+import queue
+import threading
 from urllib import error, request
 from urllib.parse import urlparse
 from dataclasses import dataclass
@@ -35,7 +36,9 @@ class SystemConfig:
     OLLAMA_URL = os.getenv("GOETIA_OLLAMA_URL", "http://127.0.0.1:11434")
     OLLAMA_MODEL = os.getenv("GOETIA_MODEL", "deepseek v3:1671b-cloud")
     # Limite rígido para evitar sensação de travamento durante chamadas ao modelo.
-    OLLAMA_TIMEOUT_S = 40
+    OLLAMA_TIMEOUT_S = int(os.getenv("GOETIA_OLLAMA_TIMEOUT", "40"))
+    # Intervalo de atualização visual/log para não poluir o terminal.
+    OLLAMA_PROGRESS_INTERVAL_S = int(os.getenv("GOETIA_PROGRESS_INTERVAL", "2"))
     OLLAMA_HEALTH_URL = os.getenv("GOETIA_OLLAMA_HEALTH_URL", "http://127.0.0.1:11434/api/tags")
     LLM_DEBUG_LOG = Path(os.getenv("GOETIA_LLM_LOG", "goetia_llm.log"))
 
@@ -418,7 +421,8 @@ class GoeticChatSystem:
             "Canal infernal em alinhamento ritualístico...",
             "Mantendo o portal estável, aguarde...",
         ]
-        phrase = phrases[(elapsed // 2) % len(phrases)]
+        slot = max(1, SystemConfig.OLLAMA_PROGRESS_INTERVAL_S)
+        phrase = phrases[(elapsed // slot) % len(phrases)]
         status = f"[LLM {elapsed:02d}s/{SystemConfig.OLLAMA_TIMEOUT_S}s | modelo: {model}] {phrase}"
         print(status)
         self._log_llm(status)
@@ -438,39 +442,52 @@ class GoeticChatSystem:
             method="POST",
         )
 
-        def _call_api() -> Dict[str, Any]:
-            with request.urlopen(req, timeout=SystemConfig.OLLAMA_TIMEOUT_S) as resp:
-                body = resp.read().decode("utf-8")
-                return json.loads(body)
+        response_q: "queue.Queue[Tuple[str, Any]]" = queue.Queue(maxsize=1)
 
-        with futures.ThreadPoolExecutor(max_workers=1) as executor:
-            future = executor.submit(_call_api)
-            elapsed = 0
-            while not future.done() and elapsed < SystemConfig.OLLAMA_TIMEOUT_S:
-                self._timing_feedback(elapsed, model_name)
-                time.sleep(1)
-                elapsed += 1
-
-            if not future.done():
-                future.cancel()
-                timeout_msg = f"timeout ao chamar {model_name} após {SystemConfig.OLLAMA_TIMEOUT_S}s"
-                self._log_llm(timeout_msg)
-                return None, timeout_msg, False
-
+        def _call_api() -> None:
             try:
-                parsed = future.result()
-                text = (parsed.get("message", {}).get("content", "") or "").strip()
-                if text:
-                    return text, None, False
-                return None, f"resposta vazia com modelo {model_name}", False
-            except error.HTTPError as exc:
-                detail = exc.read().decode("utf-8", errors="ignore").strip()
-                not_found = exc.code == 404 and "not found" in detail.lower() and "model" in detail.lower()
-                return None, f"HTTP {exc.code} em {model_name}: {detail[:200]}", not_found
-            except TimeoutError:
-                return None, f"timeout ao chamar {model_name}", False
-            except Exception as exc:
+                with request.urlopen(req, timeout=SystemConfig.OLLAMA_TIMEOUT_S) as resp:
+                    body = resp.read().decode("utf-8")
+                    response_q.put(("ok", json.loads(body)))
+            except Exception as exc:  # noqa: BLE001
+                response_q.put(("err", exc))
+
+        worker = threading.Thread(target=_call_api, daemon=True)
+        worker.start()
+
+        timeout_s = max(1, SystemConfig.OLLAMA_TIMEOUT_S)
+        interval = max(1, SystemConfig.OLLAMA_PROGRESS_INTERVAL_S)
+
+        # Feedback inicial imediato.
+        self._timing_feedback(0, model_name)
+
+        elapsed = 0
+        while elapsed < timeout_s:
+            try:
+                kind, payload_or_exc = response_q.get(timeout=interval)
+                if kind == "ok":
+                    parsed = payload_or_exc
+                    text = (parsed.get("message", {}).get("content", "") or "").strip()
+                    if text:
+                        return text, None, False
+                    return None, f"resposta vazia com modelo {model_name}", False
+
+                exc = payload_or_exc
+                if isinstance(exc, error.HTTPError):
+                    detail = exc.read().decode("utf-8", errors="ignore").strip()
+                    not_found = exc.code == 404 and "not found" in detail.lower() and "model" in detail.lower()
+                    return None, f"HTTP {exc.code} em {model_name}: {detail[:200]}", not_found
+                if isinstance(exc, TimeoutError):
+                    return None, f"timeout ao chamar {model_name}", False
                 return None, f"{type(exc).__name__} em {model_name}: {exc}", False
+            except queue.Empty:
+                elapsed = min(timeout_s, elapsed + interval)
+                if elapsed < timeout_s:
+                    self._timing_feedback(elapsed, model_name)
+
+        timeout_msg = f"timeout ao chamar {model_name} após {timeout_s}s"
+        self._log_llm(timeout_msg)
+        return None, timeout_msg, False
 
     def _serialize(self) -> Dict[str, Any]:
         return {
@@ -516,16 +533,19 @@ class GoeticChatSystem:
 
     def _model_candidates(self) -> List[str]:
         primary = (self.active_model or SystemConfig.OLLAMA_MODEL).strip()
-        candidates = [primary]
-        cleaned = primary.replace(" ", "-")
-        if cleaned and cleaned not in candidates:
-            candidates.append(cleaned)
         cfg = SystemConfig.OLLAMA_MODEL.strip()
-        if cfg and cfg not in candidates:
-            candidates.append(cfg)
-        cfg_clean = cfg.replace(" ", "-")
-        if cfg_clean and cfg_clean not in candidates:
-            candidates.append(cfg_clean)
+
+        ordered = [
+            primary,
+            primary.replace(" ", "-"),
+            cfg,
+            cfg.replace(" ", "-"),
+        ]
+
+        candidates: List[str] = []
+        for name in ordered:
+            if name and name not in candidates:
+                candidates.append(name)
         return candidates
 
     def _list_ollama_models(self) -> List[str]:
