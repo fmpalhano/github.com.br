@@ -46,7 +46,7 @@ A exportação segue exatamente as colunas:
 
 ### Regras críticas da exportação
 
-- O arquivo é gerado em **UTF-8 com BOM** (`utf-8-sig`) para evitar corrupção de acentuação no Excel.
+- O arquivo é gerado em **UTF-8 com BOM** (`utf-8-sig`) para evitar corrupção de acentuação no Excel, e inclui a diretiva `sep=,` para garantir abertura correta em colunas no Excel pt-BR.
 - As colunas **CHAVE**, **DATA** e **PEP** são sempre exportadas vazias (`""`) para preenchimento automático na planilha destino.
 - `VALOR_UNITÁRIO` vem diretamente da base (material/serviço), sem recálculo por divisão.
 - Cada material selecionado gera exatamente uma linha no CSV.

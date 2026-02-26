@@ -77,6 +77,8 @@ def test_exporta_csv_padrao_com_campos_vazios_e_valores_consistentes(tmp_path: P
     exportar_csv_padrao(res, out)
 
     with out.open(encoding="utf-8-sig", newline="") as fh:
+        primeira_linha = fh.readline().strip()
+        assert primeira_linha == "sep=,"
         reader = csv.DictReader(fh)
         rows = list(reader)
         assert reader.fieldnames == COLUNAS_EXPORTACAO

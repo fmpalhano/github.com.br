@@ -178,6 +178,8 @@ def exportar_csv_padrao(resultado: ResultadoOrcamento, caminho: Path) -> None:
     transporte_por_linha = (resultado.valor_transporte / len(itens)) if itens else 0.0
 
     with caminho.open("w", newline="", encoding="utf-8-sig") as arquivo:
+        # Ajuda o Excel (locale pt-BR) a reconhecer vírgula como separador de colunas.
+        arquivo.write("sep=,\n")
         writer = csv.DictWriter(arquivo, fieldnames=COLUNAS_EXPORTACAO, delimiter=",")
         writer.writeheader()
 
