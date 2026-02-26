@@ -28,6 +28,7 @@ Aplicação desktop com GUI única, base interna de materiais, editor avançado 
   - remover
   - salvar/cancelar
 - Persistência local em `data/materiais_base.json`
+- Catálogo interno expandido com materiais elétricos (descrição + unidade) incorporados ao código, sem planilha externa.
 
 ## Regras de negócio implementadas
 
