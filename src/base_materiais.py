@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
+import unicodedata
 
 
 @dataclass(frozen=True)
@@ -157,13 +158,10 @@ TRAFO DT 3F 23,1KV 75KVA 220/127V OV	UN
 
 
 def _sanitize_text(value: str) -> str:
-    return (
-        value.replace("Â", "")
-        .replace("Ã‡", "Ç")
-        .replace("Ã", "Á")
-        .replace("AÃ", "A")
-        .strip()
-    )
+    bruto = value.replace("﻿", "").strip()
+    normalizado = unicodedata.normalize("NFKD", bruto)
+    sem_acento = normalizado.encode("ascii", "ignore").decode("ascii")
+    return " ".join(sem_acento.split())
 
 
 def _parse_tsv_materials() -> list[dict[str, object]]:

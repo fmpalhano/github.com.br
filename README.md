@@ -1,4 +1,4 @@
-# Sistema PROFISSIONAL de Orçamento para Obra Elétrica (Tkinter)
+# Sistema PROFISSIONAL de Orçamento para Obra Eletrica (Tkinter)
 
 Aplicação desktop com GUI única, base interna de materiais, editor avançado embutido e exportação CSV padronizada.
 
@@ -12,9 +12,9 @@ Aplicação desktop com GUI única, base interna de materiais, editor avançado 
 ## Recursos principais
 
 - Tipo de serviço:
-  - Obra Elétrica
-  - Ativação Elétrica
-  - Lançamento de Cabo Elétrico
+  - Obra Eletrica
+  - Ativacao Eletrica
+  - Lancamento de Cabo Eletrico
 - Seleção de serviço por tipo
 - Campos numéricos (clientes, metros por ramal, distância km)
 - Lista completa de materiais com:
@@ -51,6 +51,7 @@ A exportação segue exatamente as colunas:
 - As colunas **CHAVE**, **DATA** e **PEP** são sempre exportadas vazias (`""`) para preenchimento automático na planilha destino.
 - `VALOR_UNITÁRIO` vem diretamente da base (material/serviço), sem recálculo por divisão.
 - Cada material selecionado gera exatamente uma linha no CSV.
+- Para evitar corrupcao de encoding no destino, os valores textuais sao exportados sem acentos.
 - `VALOR_REALIZADO = VALOR_UNITÁRIO × QTD_REALIZADO`
 - `VALOR_TOTAL = VALOR_REALIZADO + CALC. TRANSPORTE`
 - `DIFERENÇA = VALOR_TOTAL - VALOR_REALIZADO`

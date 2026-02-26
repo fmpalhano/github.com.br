@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import csv
 import tkinter as tk
+import unicodedata
 from dataclasses import dataclass
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
@@ -9,17 +10,17 @@ from tkinter import filedialog, messagebox, ttk
 from src.material_storage import Material, MaterialStorage
 
 SERVICOS_POR_TIPO: dict[str, list[dict[str, float | str]]] = {
-    "Obra Elétrica": [
-        {"nome": "Instalação de Poste", "codigo": "OBR.001", "valor_unitario": 52.0},
+    "Obra Eletrica": [
+        {"nome": "Instalacao de Poste", "codigo": "OBR.001", "valor_unitario": 52.0},
         {"nome": "Adequação de Rede", "codigo": "OBR.002", "valor_unitario": 64.0},
     ],
-    "Ativação Elétrica": [
-        {"nome": "Ligação de Cliente", "codigo": "ATV.001", "valor_unitario": 380.0},
-        {"nome": "Ativação de Medidor", "codigo": "ATV.002", "valor_unitario": 420.0},
+    "Ativacao Eletrica": [
+        {"nome": "Ligacao de Cliente", "codigo": "ATV.001", "valor_unitario": 380.0},
+        {"nome": "Ativacao de Medidor", "codigo": "ATV.002", "valor_unitario": 420.0},
     ],
-    "Lançamento de Cabo Elétrico": [
-        {"nome": "Lançamento Aéreo", "codigo": "CAB.001", "valor_unitario": 1850.0},
-        {"nome": "Lançamento Subterrâneo", "codigo": "CAB.002", "valor_unitario": 2200.0},
+    "Lancamento de Cabo Eletrico": [
+        {"nome": "Lancamento Aereo", "codigo": "CAB.001", "valor_unitario": 1850.0},
+        {"nome": "Lancamento Subterraneo", "codigo": "CAB.002", "valor_unitario": 2200.0},
     ],
 }
 
@@ -95,6 +96,11 @@ def formatar_moeda(valor: float) -> str:
     return "R$ " + bruto.replace(",", "X").replace(".", ",").replace("X", ".")
 
 
+def remover_acentos(texto: str) -> str:
+    normalizado = unicodedata.normalize("NFKD", texto or "")
+    return normalizado.encode("ascii", "ignore").decode("ascii")
+
+
 def calcular_orcamento(
     supervisor: str,
     equipe: str,
@@ -115,9 +121,9 @@ def calcular_orcamento(
         raise ValueError("Serviço é obrigatório.")
 
     metragem_final = calcular_metragem_final(quantidade_clientes, metros_ramal)
-    if tipo_servico == "Lançamento de Cabo Elétrico":
+    if tipo_servico == "Lancamento de Cabo Eletrico":
         quantidade_servico = metragem_final / 1000.0
-    elif tipo_servico == "Ativação Elétrica":
+    elif tipo_servico == "Ativacao Eletrica":
         quantidade_servico = float(quantidade_clientes)
     else:
         quantidade_servico = metragem_final
@@ -194,17 +200,17 @@ def exportar_csv_padrao(resultado: ResultadoOrcamento, caminho: Path) -> None:
                 {
                     "CHAVE": "",
                     "DATA": "",
-                    "SUPERVISOR": resultado.supervisor,
-                    "EQUIPE": resultado.equipe,
+                    "SUPERVISOR": remover_acentos(resultado.supervisor),
+                    "EQUIPE": remover_acentos(resultado.equipe),
                     "PEP": "",
-                    "DESCRIÇÃO OBRA": resultado.descricao_obra,
-                    "ENCARREGADO": resultado.encarregado,
-                    "TIPO SERVIÇO": resultado.tipo_servico,
-                    "SERVIÇO": resultado.servico,
-                    "MATERIAL": item.material.descricao,
+                    "DESCRIÇÃO OBRA": remover_acentos(resultado.descricao_obra),
+                    "ENCARREGADO": remover_acentos(resultado.encarregado),
+                    "TIPO SERVIÇO": remover_acentos(resultado.tipo_servico),
+                    "SERVIÇO": remover_acentos(resultado.servico),
+                    "MATERIAL": remover_acentos(item.material.descricao),
                     "QTD": f"{item.quantidade:.4f}",
                     "GPS POSTE": "",
-                    "SERVIÇO_REALIZADO": resultado.servico,
+                    "SERVIÇO_REALIZADO": remover_acentos(resultado.servico),
                     "QTD_REALIZADO": f"{qtd_realizado:.4f}",
                     "VALID_EVIDÊNCIA": "",
                     "RETORNO_META_Ñ_ALCANÇADA": "",

@@ -23,8 +23,8 @@ def test_lancamento_converte_para_km():
         equipe="E",
         descricao_obra="D",
         encarregado="N",
-        tipo_servico="Lançamento de Cabo Elétrico",
-        servico="Lançamento Aéreo",
+        tipo_servico="Lancamento de Cabo Eletrico",
+        servico="Lancamento Aereo",
         cod_servico="CAB.001",
         valor_unitario_servico=1850.0,
         quantidade_clientes=5,
@@ -60,8 +60,8 @@ def test_exporta_csv_padrao_com_campos_vazios_e_valores_consistentes(tmp_path: P
         equipe="Eq",
         descricao_obra="Obra",
         encarregado="Enc",
-        tipo_servico="Obra Elétrica",
-        servico="Instalação de Poste",
+        tipo_servico="Obra Eletrica",
+        servico="Instalacao de Poste",
         cod_servico="OBR.001",
         valor_unitario_servico=52.0,
         quantidade_clientes=2,
@@ -93,3 +93,5 @@ def test_exporta_csv_padrao_com_campos_vazios_e_valores_consistentes(tmp_path: P
     assert rows[0]["CALC. TRANSPORTE"] == "9.00"
     assert rows[0]["VALOR_TOTAL"] == "209.00"
     assert rows[0]["DIFERENÇA"] == "9.00"
+    assert rows[0]["TIPO SERVIÇO"] == "Obra Eletrica"
+    assert rows[0]["SERVIÇO"] == "Instalacao de Poste"
