@@ -1,14 +1,12 @@
 from __future__ import annotations
 
 import csv
-import datetime as dt
 import tkinter as tk
 from dataclasses import dataclass
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
 from src.material_storage import Material, MaterialStorage
-
 
 SERVICOS_POR_TIPO: dict[str, list[dict[str, float | str]]] = {
     "Obra Elétrica": [
@@ -24,7 +22,6 @@ SERVICOS_POR_TIPO: dict[str, list[dict[str, float | str]]] = {
         {"nome": "Lançamento Subterrâneo", "codigo": "CAB.002", "valor_unitario": 2200.0},
     ],
 }
-
 
 COLUNAS_EXPORTACAO = [
     "CHAVE",
@@ -59,18 +56,11 @@ class ItemSelecionado:
     material: Material
     quantidade: float
 
-    @property
-    def total(self) -> float:
-        return self.quantidade * self.material.valor_unitario
-
 
 @dataclass(frozen=True)
 class ResultadoOrcamento:
-    chave: str
-    data: str
     supervisor: str
     equipe: str
-    pep: str
     descricao_obra: str
     encarregado: str
     tipo_servico: str
@@ -88,10 +78,10 @@ class ResultadoOrcamento:
 
     @property
     def valor_materiais(self) -> float:
-        return sum(item.total for item in self.itens_materiais)
+        return sum(item.quantidade * item.material.valor_unitario for item in self.itens_materiais)
 
     @property
-    def valor_total(self) -> float:
+    def valor_total_geral(self) -> float:
         return self.valor_servico + self.valor_materiais + self.valor_transporte
 
 
@@ -106,10 +96,8 @@ def formatar_moeda(valor: float) -> str:
 
 
 def calcular_orcamento(
-    chave: str,
     supervisor: str,
     equipe: str,
-    pep: str,
     descricao_obra: str,
     encarregado: str,
     tipo_servico: str,
@@ -138,11 +126,8 @@ def calcular_orcamento(
     valor_transporte = distancia_km * 12.0
 
     return ResultadoOrcamento(
-        chave=chave,
-        data=dt.date.today().isoformat(),
         supervisor=supervisor,
         equipe=equipe,
-        pep=pep,
         descricao_obra=descricao_obra,
         encarregado=encarregado,
         tipo_servico=tipo_servico,
@@ -163,7 +148,6 @@ def calcular_orcamento(
 def gerar_preview(resultado: ResultadoOrcamento) -> str:
     linhas = [
         "=== ORÇAMENTO OBRA ELÉTRICA ===",
-        f"Chave: {resultado.chave} | Data: {resultado.data}",
         f"Tipo Serviço: {resultado.tipo_servico} | Serviço: {resultado.servico}",
         f"Metragem final: {resultado.metragem_final:.2f} m",
         f"Valor Serviço: {formatar_moeda(resultado.valor_servico)}",
@@ -174,35 +158,43 @@ def gerar_preview(resultado: ResultadoOrcamento) -> str:
     if not resultado.itens_materiais:
         linhas.append("- Nenhum material selecionado")
     for item in resultado.itens_materiais:
+        total_item = item.quantidade * item.material.valor_unitario
         linhas.append(
             f"- {item.material.codigo} | {item.material.descricao} | {item.quantidade:g} {item.material.unidade} | "
-            f"{formatar_moeda(item.material.valor_unitario)} | Total: {formatar_moeda(item.total)}"
+            f"{formatar_moeda(item.material.valor_unitario)} | Total: {formatar_moeda(total_item)}"
         )
     linhas.extend(
         [
             "",
             f"Total Materiais: {formatar_moeda(resultado.valor_materiais)}",
-            f"TOTAL GERAL: {formatar_moeda(resultado.valor_total)}",
+            f"TOTAL GERAL: {formatar_moeda(resultado.valor_total_geral)}",
         ]
     )
     return "\n".join(linhas)
 
 
 def exportar_csv_padrao(resultado: ResultadoOrcamento, caminho: Path) -> None:
-    with caminho.open("w", newline="", encoding="utf-8") as arquivo:
-        writer = csv.DictWriter(arquivo, fieldnames=COLUNAS_EXPORTACAO)
+    itens = resultado.itens_materiais
+    transporte_por_linha = (resultado.valor_transporte / len(itens)) if itens else 0.0
+
+    with caminho.open("w", newline="", encoding="utf-8-sig") as arquivo:
+        writer = csv.DictWriter(arquivo, fieldnames=COLUNAS_EXPORTACAO, delimiter=",")
         writer.writeheader()
 
-        for item in resultado.itens_materiais or [ItemSelecionado(Material("", "", "", 0.0), 0.0)]:
-            valor_realizado = item.total if item.material.codigo else 0.0
-            diferenca = resultado.valor_total - valor_realizado
+        for item in itens:
+            valor_unitario = item.material.valor_unitario
+            qtd_realizado = item.quantidade
+            valor_realizado = valor_unitario * qtd_realizado
+            valor_total = valor_realizado + transporte_por_linha
+            diferenca = valor_total - valor_realizado
+
             writer.writerow(
                 {
-                    "CHAVE": resultado.chave,
-                    "DATA": resultado.data,
+                    "CHAVE": "",
+                    "DATA": "",
                     "SUPERVISOR": resultado.supervisor,
                     "EQUIPE": resultado.equipe,
-                    "PEP": resultado.pep,
+                    "PEP": "",
                     "DESCRIÇÃO OBRA": resultado.descricao_obra,
                     "ENCARREGADO": resultado.encarregado,
                     "TIPO SERVIÇO": resultado.tipo_servico,
@@ -211,16 +203,16 @@ def exportar_csv_padrao(resultado: ResultadoOrcamento, caminho: Path) -> None:
                     "QTD": f"{item.quantidade:.4f}",
                     "GPS POSTE": "",
                     "SERVIÇO_REALIZADO": resultado.servico,
-                    "QTD_REALIZADO": f"{resultado.quantidade_servico:.4f}",
-                    "VALID_EVIDÊNCIA": "PENDENTE",
+                    "QTD_REALIZADO": f"{qtd_realizado:.4f}",
+                    "VALID_EVIDÊNCIA": "",
                     "RETORNO_META_Ñ_ALCANÇADA": "",
                     "VALOR_REALIZADO": f"{valor_realizado:.2f}",
-                    "VALOR_TOTAL": f"{resultado.valor_total:.2f}",
-                    "VALOR_UNITÁRIO": f"{item.material.valor_unitario:.2f}",
+                    "VALOR_TOTAL": f"{valor_total:.2f}",
+                    "VALOR_UNITÁRIO": f"{valor_unitario:.2f}",
                     "COD_SERVIÇO": item.material.cod_servico or resultado.cod_servico,
                     "COD_SIMULADOR": item.material.cod_simulador,
                     "DISTANCIA": f"{resultado.distancia_km:.2f}",
-                    "CALC. TRANSPORTE": f"{resultado.valor_transporte:.2f}",
+                    "CALC. TRANSPORTE": f"{transporte_por_linha:.2f}",
                     "DIFERENÇA": f"{diferenca:.2f}",
                 }
             )
@@ -257,7 +249,9 @@ class MaterialEditor(tk.Toplevel):
 
         form = ttk.Frame(self)
         form.pack(fill="x", padx=8)
-        self.vars = {k: tk.StringVar() for k in ["codigo", "descricao", "unidade", "valor", "cod_servico", "cod_simulador"]}
+        self.vars = {
+            k: tk.StringVar() for k in ["codigo", "descricao", "unidade", "valor", "cod_servico", "cod_simulador"]
+        }
         labels = ["codigo", "descricao", "unidade", "valor", "cod_servico", "cod_simulador"]
         for i, k in enumerate(labels):
             ttk.Label(form, text=k.replace("_", " ").title()).grid(row=0, column=i, sticky="w")
@@ -276,7 +270,11 @@ class MaterialEditor(tk.Toplevel):
     def _recarregar_tree(self) -> None:
         self.tree.delete(*self.tree.get_children())
         for m in self.materiais:
-            self.tree.insert("", "end", values=(m.codigo, m.descricao, m.unidade, f"{m.valor_unitario:.2f}", m.cod_servico, m.cod_simulador))
+            self.tree.insert(
+                "",
+                "end",
+                values=(m.codigo, m.descricao, m.unidade, f"{m.valor_unitario:.2f}", m.cod_servico, m.cod_simulador),
+            )
 
     def _carregar_selecao(self, _event=None) -> None:
         sel = self.tree.selection()
@@ -354,10 +352,8 @@ class AplicativoOrcamento(tk.Tk):
         self.tipo_servico_var = tk.StringVar()
         self.servico_var = tk.StringVar()
         self.busca_var = tk.StringVar()
-        self.chave_var = tk.StringVar(value="ORC-001")
         self.supervisor_var = tk.StringVar()
         self.equipe_var = tk.StringVar()
-        self.pep_var = tk.StringVar()
         self.descricao_obra_var = tk.StringVar()
         self.encarregado_var = tk.StringVar()
         self.clientes_var = tk.StringVar(value="1")
@@ -371,16 +367,28 @@ class AplicativoOrcamento(tk.Tk):
         dados = ttk.LabelFrame(root, text="Dados do orçamento", padding=8)
         dados.pack(fill="x")
         labels = [
-            ("Chave", self.chave_var), ("Supervisor", self.supervisor_var), ("Equipe", self.equipe_var),
-            ("PEP", self.pep_var), ("Descrição Obra", self.descricao_obra_var), ("Encarregado", self.encarregado_var),
-            ("Qtd Clientes", self.clientes_var), ("Metros/Ramal", self.metros_var), ("Distância KM", self.distancia_var),
+            ("Supervisor", self.supervisor_var),
+            ("Equipe", self.equipe_var),
+            ("Descrição Obra", self.descricao_obra_var),
+            ("Encarregado", self.encarregado_var),
+            ("Qtd Clientes", self.clientes_var),
+            ("Metros/Ramal", self.metros_var),
+            ("Distância KM", self.distancia_var),
         ]
         for i, (txt, var) in enumerate(labels):
-            ttk.Label(dados, text=txt).grid(row=(i//3)*2, column=i%3, sticky="w")
-            ttk.Entry(dados, textvariable=var, width=38).grid(row=(i//3)*2+1, column=i%3, padx=6, pady=(0, 6), sticky="w")
+            ttk.Label(dados, text=txt).grid(row=(i // 3) * 2, column=i % 3, sticky="w")
+            ttk.Entry(dados, textvariable=var, width=38).grid(
+                row=(i // 3) * 2 + 1, column=i % 3, padx=6, pady=(0, 6), sticky="w"
+            )
 
         ttk.Label(dados, text="Tipo Serviço").grid(row=6, column=0, sticky="w")
-        tipo_combo = ttk.Combobox(dados, textvariable=self.tipo_servico_var, state="readonly", values=list(SERVICOS_POR_TIPO.keys()), width=35)
+        tipo_combo = ttk.Combobox(
+            dados,
+            textvariable=self.tipo_servico_var,
+            state="readonly",
+            values=list(SERVICOS_POR_TIPO.keys()),
+            width=35,
+        )
         tipo_combo.grid(row=7, column=0, sticky="w", padx=6)
         tipo_combo.bind("<<ComboboxSelected>>", self._atualizar_servicos)
 
@@ -401,7 +409,9 @@ class AplicativoOrcamento(tk.Tk):
         self.canvas.configure(yscrollcommand=sb.set)
         self.material_frame = ttk.Frame(self.canvas)
         self.canvas.create_window((0, 0), window=self.material_frame, anchor="nw")
-        self.material_frame.bind("<Configure>", lambda _e: self.canvas.configure(scrollregion=self.canvas.bbox("all")))
+        self.material_frame.bind(
+            "<Configure>", lambda _e: self.canvas.configure(scrollregion=self.canvas.bbox("all"))
+        )
 
         acoes = ttk.Frame(root)
         acoes.pack(fill="x")
@@ -433,19 +443,25 @@ class AplicativoOrcamento(tk.Tk):
             ttk.Label(self.material_frame, text=h).grid(row=0, column=c, sticky="w")
 
         filtro = self.busca_var.get().strip().lower()
-        visiveis = [m for m in self.materiais if not filtro or filtro in m.codigo.lower() or filtro in m.descricao.lower()]
+        visiveis = [
+            m for m in self.materiais if not filtro or filtro in m.codigo.lower() or filtro in m.descricao.lower()
+        ]
         for i, m in enumerate(visiveis, start=1):
             if m.codigo not in self.selecoes:
                 self.selecoes[m.codigo] = tk.BooleanVar(value=False)
             var_sel = self.selecoes[m.codigo]
             qtd_var = tk.StringVar(value=self.quantidades.get(m.codigo, "0"))
-            qtd_var.trace_add("write", lambda *_a, codigo=m.codigo, v=qtd_var: self.quantidades.__setitem__(codigo, v.get()))
+            qtd_var.trace_add(
+                "write", lambda *_a, codigo=m.codigo, v=qtd_var: self.quantidades.__setitem__(codigo, v.get())
+            )
 
             ttk.Checkbutton(self.material_frame, variable=var_sel).grid(row=i, column=0, sticky="w")
             ttk.Label(self.material_frame, text=m.codigo, width=12).grid(row=i, column=1, sticky="w")
             ttk.Label(self.material_frame, text=m.descricao, width=55).grid(row=i, column=2, sticky="w")
             ttk.Label(self.material_frame, text=m.unidade, width=7).grid(row=i, column=3, sticky="w")
-            ttk.Label(self.material_frame, text=formatar_moeda(m.valor_unitario), width=14).grid(row=i, column=4, sticky="w")
+            ttk.Label(self.material_frame, text=formatar_moeda(m.valor_unitario), width=14).grid(
+                row=i, column=4, sticky="w"
+            )
             ttk.Entry(self.material_frame, textvariable=qtd_var, width=10).grid(row=i, column=5, sticky="w")
 
     def _coletar_itens(self) -> list[ItemSelecionado]:
@@ -472,10 +488,8 @@ class AplicativoOrcamento(tk.Tk):
         try:
             cod_servico, valor_uni = self._servico_escolhido()
             self.resultado_atual = calcular_orcamento(
-                chave=self.chave_var.get().strip() or "ORC-SEM-CHAVE",
                 supervisor=self.supervisor_var.get().strip(),
                 equipe=self.equipe_var.get().strip(),
-                pep=self.pep_var.get().strip(),
                 descricao_obra=self.descricao_obra_var.get().strip(),
                 encarregado=self.encarregado_var.get().strip(),
                 tipo_servico=self.tipo_servico_var.get().strip(),

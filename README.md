@@ -44,6 +44,16 @@ A exportação segue exatamente as colunas:
 
 `CHAVE, DATA, SUPERVISOR, EQUIPE, PEP, DESCRIÇÃO OBRA, ENCARREGADO, TIPO SERVIÇO, SERVIÇO, MATERIAL, QTD, GPS POSTE, SERVIÇO_REALIZADO, QTD_REALIZADO, VALID_EVIDÊNCIA, RETORNO_META_Ñ_ALCANÇADA, VALOR_REALIZADO, VALOR_TOTAL, VALOR_UNITÁRIO, COD_SERVIÇO, COD_SIMULADOR, DISTANCIA, CALC. TRANSPORTE, DIFERENÇA`
 
+### Regras críticas da exportação
+
+- O arquivo é gerado em **UTF-8 com BOM** (`utf-8-sig`) para evitar corrupção de acentuação no Excel.
+- As colunas **CHAVE**, **DATA** e **PEP** são sempre exportadas vazias (`""`) para preenchimento automático na planilha destino.
+- `VALOR_UNITÁRIO` vem diretamente da base (material/serviço), sem recálculo por divisão.
+- Cada material selecionado gera exatamente uma linha no CSV.
+- `VALOR_REALIZADO = VALOR_UNITÁRIO × QTD_REALIZADO`
+- `VALOR_TOTAL = VALOR_REALIZADO + CALC. TRANSPORTE`
+- `DIFERENÇA = VALOR_TOTAL - VALOR_REALIZADO`
+
 ## Execução
 
 ```bash

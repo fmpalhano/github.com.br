@@ -1,5 +1,6 @@
 from pathlib import Path
 
+import csv
 import pytest
 
 from src.material_storage import Material
@@ -18,10 +19,8 @@ def test_metragem_minima_com_sangria():
 
 def test_lancamento_converte_para_km():
     res = calcular_orcamento(
-        chave="C1",
         supervisor="S",
         equipe="E",
-        pep="P",
         descricao_obra="D",
         encarregado="N",
         tipo_servico="Lançamento de Cabo Elétrico",
@@ -40,10 +39,8 @@ def test_lancamento_converte_para_km():
 def test_tipo_servico_obrigatorio():
     with pytest.raises(ValueError):
         calcular_orcamento(
-            chave="C1",
             supervisor="S",
             equipe="E",
-            pep="P",
             descricao_obra="D",
             encarregado="N",
             tipo_servico="",
@@ -57,12 +54,10 @@ def test_tipo_servico_obrigatorio():
         )
 
 
-def test_exporta_csv_padrao_colunas_exatas(tmp_path: Path):
+def test_exporta_csv_padrao_com_campos_vazios_e_valores_consistentes(tmp_path: Path):
     res = calcular_orcamento(
-        chave="C1",
         supervisor="Sup",
         equipe="Eq",
-        pep="Pep",
         descricao_obra="Obra",
         encarregado="Enc",
         tipo_servico="Obra Elétrica",
@@ -81,7 +76,18 @@ def test_exporta_csv_padrao_colunas_exatas(tmp_path: Path):
     out = tmp_path / "padrao.csv"
     exportar_csv_padrao(res, out)
 
-    first = out.read_text(encoding="utf-8").splitlines()[0].split(",")
-    assert first == COLUNAS_EXPORTACAO
-    lines = out.read_text(encoding="utf-8").splitlines()
-    assert len(lines) == 3
+    with out.open(encoding="utf-8-sig", newline="") as fh:
+        reader = csv.DictReader(fh)
+        rows = list(reader)
+        assert reader.fieldnames == COLUNAS_EXPORTACAO
+
+    assert len(rows) == 2
+    assert rows[0]["CHAVE"] == ""
+    assert rows[0]["DATA"] == ""
+    assert rows[0]["PEP"] == ""
+    assert rows[0]["VALOR_UNITÁRIO"] == "100.00"
+    assert rows[0]["QTD_REALIZADO"] == "2.0000"
+    assert rows[0]["VALOR_REALIZADO"] == "200.00"
+    assert rows[0]["CALC. TRANSPORTE"] == "9.00"
+    assert rows[0]["VALOR_TOTAL"] == "209.00"
+    assert rows[0]["DIFERENÇA"] == "9.00"
