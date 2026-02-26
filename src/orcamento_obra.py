@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-import argparse
 import csv
+import tkinter as tk
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable
+from tkinter import filedialog, messagebox, ttk
 
 
 CATALOGO_COLUNAS_OBRIGATORIAS = {
@@ -15,6 +15,8 @@ CATALOGO_COLUNAS_OBRIGATORIAS = {
     "RESUMO",
     "PRIORIDADE",
 }
+
+ITENS_COLUNAS_OBRIGATORIAS = {"CODLISTA", "QUANTIDADE", "PRECO_UNITARIO"}
 
 
 @dataclass(frozen=True)
@@ -93,16 +95,18 @@ def carregar_catalogo_materiais(caminho_csv: Path) -> dict[str, MaterialCatalogo
 
 
 def carregar_itens_orcamento(caminho_csv: Path) -> list[ItemOrcamento]:
-    colunas = {"CODLISTA", "QUANTIDADE", "PRECO_UNITARIO"}
     with caminho_csv.open(newline="", encoding="utf-8") as arquivo:
         leitor = csv.DictReader(arquivo)
-        _validar_colunas(set(leitor.fieldnames or []), colunas, caminho_csv)
+        _validar_colunas(set(leitor.fieldnames or []), ITENS_COLUNAS_OBRIGATORIAS, caminho_csv)
 
         itens: list[ItemOrcamento] = []
         for linha in leitor:
+            codigo = _normalizar_texto(linha["CODLISTA"])
+            if not codigo:
+                continue
             itens.append(
                 ItemOrcamento(
-                    cod_lista=_normalizar_texto(linha["CODLISTA"]),
+                    cod_lista=codigo,
                     quantidade=float(linha["QUANTIDADE"]),
                     preco_unitario=float(linha["PRECO_UNITARIO"]),
                 )
@@ -148,32 +152,106 @@ def gerar_relatorio(orcamento: OrcamentoMateriais, catalogo: dict[str, MaterialC
     return "\n".join(linhas)
 
 
-def criar_parser_argumentos() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Calcula orçamento de materiais")
-    parser.add_argument("--catalogo-csv", type=Path, required=True, help="CSV do catálogo")
-    parser.add_argument(
-        "--orcamento-csv",
-        type=Path,
-        required=True,
-        help="CSV com itens do orçamento (CODLISTA, QUANTIDADE, PRECO_UNITARIO)",
-    )
-    parser.add_argument(
-        "--imprevistos",
-        type=float,
-        default=5.0,
-        help="Percentual de imprevistos (padrão: 5)",
-    )
-    return parser
+def gerar_relatorio_de_arquivos(
+    caminho_catalogo: Path, caminho_orcamento: Path, imprevistos_percentual: float
+) -> str:
+    catalogo = carregar_catalogo_materiais(caminho_catalogo)
+    itens = carregar_itens_orcamento(caminho_orcamento)
+    orcamento = OrcamentoMateriais(itens=itens, taxa_imprevistos_percentual=imprevistos_percentual)
+    return gerar_relatorio(orcamento, catalogo)
 
 
-def main(argv: Iterable[str] | None = None) -> int:
-    args = criar_parser_argumentos().parse_args(list(argv) if argv is not None else None)
+class AplicativoOrcamento(tk.Tk):
+    def __init__(self) -> None:
+        super().__init__()
+        self.title("Orçamento de Materiais")
+        self.geometry("980x680")
 
-    catalogo = carregar_catalogo_materiais(args.catalogo_csv)
-    itens = carregar_itens_orcamento(args.orcamento_csv)
+        self.catalogo_var = tk.StringVar()
+        self.orcamento_var = tk.StringVar()
+        self.imprevistos_var = tk.StringVar(value="5")
 
-    orcamento = OrcamentoMateriais(itens=itens, taxa_imprevistos_percentual=args.imprevistos)
-    print(gerar_relatorio(orcamento, catalogo))
+        self._montar_interface()
+
+    def _montar_interface(self) -> None:
+        container = ttk.Frame(self, padding=12)
+        container.pack(fill="both", expand=True)
+
+        ttk.Label(container, text="Catálogo de materiais (CSV)").grid(row=0, column=0, sticky="w")
+        ttk.Entry(container, textvariable=self.catalogo_var).grid(
+            row=1, column=0, sticky="ew", padx=(0, 8)
+        )
+        ttk.Button(container, text="Selecionar", command=self._selecionar_catalogo).grid(
+            row=1, column=1, sticky="ew"
+        )
+
+        ttk.Label(container, text="Itens do orçamento (CSV)").grid(
+            row=2, column=0, sticky="w", pady=(10, 0)
+        )
+        ttk.Entry(container, textvariable=self.orcamento_var).grid(
+            row=3, column=0, sticky="ew", padx=(0, 8)
+        )
+        ttk.Button(container, text="Selecionar", command=self._selecionar_orcamento).grid(
+            row=3, column=1, sticky="ew"
+        )
+
+        ttk.Label(container, text="Imprevistos (%)").grid(row=4, column=0, sticky="w", pady=(10, 0))
+        ttk.Entry(container, textvariable=self.imprevistos_var, width=12).grid(
+            row=5, column=0, sticky="w"
+        )
+
+        ttk.Button(container, text="Calcular orçamento", command=self._calcular).grid(
+            row=5, column=1, sticky="ew"
+        )
+
+        self.relatorio_text = tk.Text(container, wrap="word")
+        self.relatorio_text.grid(row=6, column=0, columnspan=2, sticky="nsew", pady=(12, 0))
+
+        scrollbar = ttk.Scrollbar(container, orient="vertical", command=self.relatorio_text.yview)
+        scrollbar.grid(row=6, column=2, sticky="ns", pady=(12, 0))
+        self.relatorio_text.configure(yscrollcommand=scrollbar.set)
+
+        container.columnconfigure(0, weight=1)
+        container.columnconfigure(1, weight=0)
+        container.rowconfigure(6, weight=1)
+
+    def _selecionar_catalogo(self) -> None:
+        arquivo = filedialog.askopenfilename(
+            title="Selecione o catálogo de materiais",
+            filetypes=[("CSV", "*.csv"), ("Todos os arquivos", "*.*")],
+        )
+        if arquivo:
+            self.catalogo_var.set(arquivo)
+
+    def _selecionar_orcamento(self) -> None:
+        arquivo = filedialog.askopenfilename(
+            title="Selecione os itens do orçamento",
+            filetypes=[("CSV", "*.csv"), ("Todos os arquivos", "*.*")],
+        )
+        if arquivo:
+            self.orcamento_var.set(arquivo)
+
+    def _calcular(self) -> None:
+        try:
+            catalogo_path = Path(self.catalogo_var.get().strip())
+            orcamento_path = Path(self.orcamento_var.get().strip())
+            imprevistos = float(self.imprevistos_var.get().strip().replace(",", "."))
+
+            if not catalogo_path.exists():
+                raise ValueError("Selecione um catálogo CSV válido.")
+            if not orcamento_path.exists():
+                raise ValueError("Selecione um arquivo de orçamento CSV válido.")
+
+            relatorio = gerar_relatorio_de_arquivos(catalogo_path, orcamento_path, imprevistos)
+            self.relatorio_text.delete("1.0", tk.END)
+            self.relatorio_text.insert(tk.END, relatorio)
+        except Exception as exc:
+            messagebox.showerror("Erro ao calcular orçamento", str(exc))
+
+
+def main() -> int:
+    app = AplicativoOrcamento()
+    app.mainloop()
     return 0
 
 

@@ -1,9 +1,12 @@
+from pathlib import Path
+
 from src.orcamento_obra import (
     ItemOrcamento,
     MaterialCatalogo,
     OrcamentoMateriais,
     formatar_moeda,
     gerar_relatorio,
+    gerar_relatorio_de_arquivos,
 )
 
 
@@ -36,6 +39,28 @@ def test_relatorio_com_item_nao_encontrado():
 
     relatorio = gerar_relatorio(orcamento, catalogo)
     assert "CÓDIGO NÃO ENCONTRADO NO CATÁLOGO" in relatorio
+
+
+def test_gerar_relatorio_de_arquivos(tmp_path: Path):
+    catalogo = tmp_path / "catalogo.csv"
+    orcamento = tmp_path / "orcamento.csv"
+
+    catalogo.write_text(
+        "ATIVACAO,LINHA_VIVA,TIPOESTR,CODLISTA,RESUMO,PRIORIDADE\n"
+        "A,,C11/400,COD1,POSTE,1\n",
+        encoding="utf-8",
+    )
+    orcamento.write_text(
+        "CODLISTA,QUANTIDADE,PRECO_UNITARIO\n"
+        "COD1,2,100\n",
+        encoding="utf-8",
+    )
+
+    relatorio = gerar_relatorio_de_arquivos(catalogo, orcamento, 5)
+
+    assert "COD1" in relatorio
+    assert "Subtotal materiais: R$ 200,00" in relatorio
+    assert "TOTAL GERAL: R$ 210,00" in relatorio
 
 
 def test_formatar_moeda_ptbr():
