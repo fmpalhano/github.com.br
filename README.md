@@ -1,78 +1,63 @@
-# Sistema de Orçamento Telecom (Tkinter)
+# Sistema PROFISSIONAL de Orçamento para Obra Elétrica (Tkinter)
 
-Aplicação desktop com **tela única** para orçamento de serviços de telecomunicações.
+Aplicação desktop com GUI única, base interna de materiais, editor avançado embutido e exportação CSV padronizada.
 
-## Princípios do sistema
+## Fluxo obrigatório
 
-- Base de materiais **interna e fixa** (não há importação de planilhas para materiais).
-- Fluxo obrigatório: **selecionar → calcular → visualizar → exportar**.
-- Exportação liberada somente após o cálculo.
+**Selecionar → Calcular → Visualizar → Exportar**
 
-## Funcionalidades
+- Exportação só é liberada após o cálculo.
+- Não há importação de planilhas externas para materiais.
 
-### 1) Materiais (base interna)
+## Recursos principais
 
-A aplicação carrega automaticamente os materiais da base interna (`src/base_materiais.py`), contendo:
-
-- Código do material
-- Descrição
-- Unidade de medida
-- Valor unitário
-
-Na GUI, o usuário apenas:
-
-- seleciona os materiais (checkbox)
-- informa a quantidade de cada material
-
-> Não é possível importar planilha de materiais nem editar a base pela interface.
-
-### 2) Tela única (Tkinter)
-
-Componentes presentes:
-
-- Tipo de Serviço (`Ativação`, `Obra`, `Lançamento de Cabo`)
-- Quantidade de clientes
-- Metros por ramal
-- Distância
-- Lista completa de materiais da base interna
+- Tipo de serviço:
+  - Obra Elétrica
+  - Ativação Elétrica
+  - Lançamento de Cabo Elétrico
+- Seleção de serviço por tipo
+- Campos numéricos (clientes, metros por ramal, distância km)
+- Lista completa de materiais com:
+  - pesquisa por código/descrição
+  - rolagem
+  - seleção e quantidade
 - Preview do orçamento
+- Editor de materiais (modo avançado):
+  - adicionar
+  - editar
+  - remover
+  - salvar/cancelar
+- Persistência local em `data/materiais_base.json`
 
-Botões:
-
-- **Calcular Orçamento**
-- **Exportar para Planilha**
-- **Limpar**
-
-### 3) Regras de negócio implementadas
+## Regras de negócio implementadas
 
 - `Metragem_Final = max(30, Qtd_Clientes × Metros_Ramal) × 1.05`
-- Para **Lançamento de Cabo**, a quantidade de serviço usa conversão para KM (`metros / 1000`).
-- Valor total:
-  - Valor do serviço = Quantidade calculada × Valor unitário do serviço
-  - Valor dos materiais = soma(Qtd × Valor unitário)
-  - Valor total = Serviço + Materiais
-- O cálculo não é permitido sem tipo de serviço selecionado.
+- Lançamento de cabo converte metragem para KM (`m / 1000`)
+- `Valor serviço = quantidade calculada × valor unitário do serviço`
+- `Valor materiais = soma(qtd × valor unitário)`
+- `Valor transporte = distância_km × 12.00`
+- `Valor total = serviço + materiais + transporte`
 
-### 4) Exportação
+## Exportação CSV (ordem exata)
 
-- Exportação em CSV por botão explícito **Exportar para Planilha**.
-- Disponível apenas após cálculo.
-- Arquivo exportado inclui:
-  - dados do serviço
-  - materiais selecionados
-  - quantidades
-  - valores unitários
-  - total por item
-  - total geral
+A exportação segue exatamente as colunas:
+
+`CHAVE, DATA, SUPERVISOR, EQUIPE, PEP, DESCRIÇÃO OBRA, ENCARREGADO, TIPO SERVIÇO, SERVIÇO, MATERIAL, QTD, GPS POSTE, SERVIÇO_REALIZADO, QTD_REALIZADO, VALID_EVIDÊNCIA, RETORNO_META_Ñ_ALCANÇADA, VALOR_REALIZADO, VALOR_TOTAL, VALOR_UNITÁRIO, COD_SERVIÇO, COD_SIMULADOR, DISTANCIA, CALC. TRANSPORTE, DIFERENÇA`
 
 ## Execução
-
-### Windows
-
-Dê duplo clique em `executar_orcamento.bat`.
-
-### Terminal
 
 ```bash
 python -m src.orcamento_obra
 ```
+
+No Windows, também é possível usar:
+
+- `executar_orcamento.bat`
+
+## Distribuição EXE (standalone)
+
+Use o script:
+
+- `gerar_exe.bat`
+
+Ele gera um executável **independente** em `dist\OrcamentoObraEletrica.exe` (sem exigir Python instalado) usando `PyInstaller --onefile --windowed`.
