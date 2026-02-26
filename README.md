@@ -74,5 +74,5 @@ Dê duplo clique em `executar_orcamento.bat`.
 ### Terminal
 
 ```bash
-python src/orcamento_obra.py
+python -m src.orcamento_obra
 ```
