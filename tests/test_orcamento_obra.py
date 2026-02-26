@@ -1,66 +1,69 @@
 from pathlib import Path
 
+import pytest
+
+from src.base_materiais import MaterialBase
 from src.orcamento_obra import (
-    ItemOrcamento,
-    MaterialCatalogo,
-    OrcamentoMateriais,
+    ItemSelecionado,
+    calcular_metragem_final,
+    calcular_orcamento,
+    exportar_orcamento_csv,
     formatar_moeda,
-    gerar_relatorio,
-    gerar_relatorio_de_arquivos,
 )
 
 
-def test_calculo_total_geral_materiais():
-    itens = [
-        ItemOrcamento(cod_lista="A", quantidade=2, preco_unitario=100.0),
-        ItemOrcamento(cod_lista="B", quantidade=3, preco_unitario=50.0),
-    ]
-    orcamento = OrcamentoMateriais(itens=itens, taxa_imprevistos_percentual=10)
-
-    assert orcamento.subtotal == 350.0
-    assert orcamento.valor_imprevistos == 35.0
-    assert orcamento.total_geral == 385.0
+def test_calcular_metragem_final_com_minimo_e_sangria():
+    assert calcular_metragem_final(1, 10) == 31.5
+    assert calcular_metragem_final(3, 20) == 63.0
 
 
-def test_relatorio_com_item_nao_encontrado():
-    orcamento = OrcamentoMateriais(
-        itens=[ItemOrcamento(cod_lista="X1", quantidade=1, preco_unitario=25.0)]
+def test_calculo_financeiro_lancamento_de_cabo():
+    material = MaterialBase("COD1", "CABO TESTE", "M", 10.0)
+    itens = [ItemSelecionado(material=material, quantidade=50)]
+
+    resultado = calcular_orcamento(
+        tipo_servico="Lançamento de Cabo",
+        quantidade_clientes=5,
+        metros_ramal=40,
+        distancia=100,
+        itens_materiais=itens,
     )
-    catalogo = {
-        "A1": MaterialCatalogo(
-            ativacao="",
-            linha_viva="ITEM A1",
-            tipo_estr="",
-            cod_lista="A1",
-            resumo="POSTE",
-            prioridade=1,
+
+    assert resultado.metragem_final == 210.0
+    assert resultado.quantidade_servico == 0.21
+    assert resultado.valor_servico == pytest.approx(388.5)
+    assert resultado.valor_materiais == 500.0
+    assert resultado.valor_total == pytest.approx(888.5)
+
+
+def test_nao_permite_calculo_sem_tipo_servico():
+    with pytest.raises(ValueError):
+        calcular_orcamento(
+            tipo_servico="",
+            quantidade_clientes=1,
+            metros_ramal=30,
+            distancia=0,
+            itens_materiais=[],
         )
-    }
-
-    relatorio = gerar_relatorio(orcamento, catalogo)
-    assert "CÓDIGO NÃO ENCONTRADO NO CATÁLOGO" in relatorio
 
 
-def test_gerar_relatorio_de_arquivos(tmp_path: Path):
-    catalogo = tmp_path / "catalogo.csv"
-    orcamento = tmp_path / "orcamento.csv"
-
-    catalogo.write_text(
-        "ATIVACAO,LINHA_VIVA,TIPOESTR,CODLISTA,RESUMO,PRIORIDADE\n"
-        "A,,C11/400,COD1,POSTE,1\n",
-        encoding="utf-8",
-    )
-    orcamento.write_text(
-        "CODLISTA,QUANTIDADE,PRECO_UNITARIO\n"
-        "COD1,2,100\n",
-        encoding="utf-8",
+def test_exportacao_csv_apos_calculo(tmp_path: Path):
+    material = MaterialBase("COD2", "POSTE TESTE", "UN", 100.0)
+    resultado = calcular_orcamento(
+        tipo_servico="Ativação",
+        quantidade_clientes=2,
+        metros_ramal=30,
+        distancia=10,
+        itens_materiais=[ItemSelecionado(material=material, quantidade=2)],
     )
 
-    relatorio = gerar_relatorio_de_arquivos(catalogo, orcamento, 5)
+    destino = tmp_path / "orcamento.csv"
+    exportar_orcamento_csv(resultado, destino)
 
-    assert "COD1" in relatorio
-    assert "Subtotal materiais: R$ 200,00" in relatorio
-    assert "TOTAL GERAL: R$ 210,00" in relatorio
+    conteudo = destino.read_text(encoding="utf-8")
+    assert "DADOS DO SERVIÇO" in conteudo
+    assert "MATERIAIS SELECIONADOS" in conteudo
+    assert "Total Geral" in conteudo
 
 
 def test_formatar_moeda_ptbr():

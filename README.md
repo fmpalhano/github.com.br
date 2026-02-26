@@ -1,53 +1,78 @@
-# github.com.br
-Git pessoal para projetos aplicados aos trabalhos que me incluo.
+# Sistema de Orçamento Telecom (Tkinter)
 
-## Programa: Cálculo de Obra (somente materiais em Tkinter)
+Aplicação desktop com **tela única** para orçamento de serviços de telecomunicações.
 
-Agora o programa roda em **uma interface única Tkinter** (desktop), focada apenas em materiais.
+## Princípios do sistema
 
-### Campos usados
+- Base de materiais **interna e fixa** (não há importação de planilhas para materiais).
+- Fluxo obrigatório: **selecionar → calcular → visualizar → exportar**.
+- Exportação liberada somente após o cálculo.
 
-#### Catálogo de materiais (CSV)
-- `ATIVACAO`
-- `LINHA_VIVA`
-- `TIPOESTR`
-- `CODLISTA`
-- `RESUMO`
-- `PRIORIDADE`
+## Funcionalidades
 
-#### Itens do orçamento (CSV)
-- `CODLISTA`
-- `QUANTIDADE`
-- `PRECO_UNITARIO`
+### 1) Materiais (base interna)
 
-## Como executar
+A aplicação carrega automaticamente os materiais da base interna (`src/base_materiais.py`), contendo:
 
-### Opção 1 (Windows): arquivo `.bat`
+- Código do material
+- Descrição
+- Unidade de medida
+- Valor unitário
 
-Clique duas vezes em `executar_orcamento.bat` (ele abre o app Tkinter em janela única e, quando disponível, sem terminal).
+Na GUI, o usuário apenas:
 
-### Opção 2 (terminal)
+- seleciona os materiais (checkbox)
+- informa a quantidade de cada material
+
+> Não é possível importar planilha de materiais nem editar a base pela interface.
+
+### 2) Tela única (Tkinter)
+
+Componentes presentes:
+
+- Tipo de Serviço (`Ativação`, `Obra`, `Lançamento de Cabo`)
+- Quantidade de clientes
+- Metros por ramal
+- Distância
+- Lista completa de materiais da base interna
+- Preview do orçamento
+
+Botões:
+
+- **Calcular Orçamento**
+- **Exportar para Planilha**
+- **Limpar**
+
+### 3) Regras de negócio implementadas
+
+- `Metragem_Final = max(30, Qtd_Clientes × Metros_Ramal) × 1.05`
+- Para **Lançamento de Cabo**, a quantidade de serviço usa conversão para KM (`metros / 1000`).
+- Valor total:
+  - Valor do serviço = Quantidade calculada × Valor unitário do serviço
+  - Valor dos materiais = soma(Qtd × Valor unitário)
+  - Valor total = Serviço + Materiais
+- O cálculo não é permitido sem tipo de serviço selecionado.
+
+### 4) Exportação
+
+- Exportação em CSV por botão explícito **Exportar para Planilha**.
+- Disponível apenas após cálculo.
+- Arquivo exportado inclui:
+  - dados do serviço
+  - materiais selecionados
+  - quantidades
+  - valores unitários
+  - total por item
+  - total geral
+
+## Execução
+
+### Windows
+
+Dê duplo clique em `executar_orcamento.bat`.
+
+### Terminal
 
 ```bash
 python src/orcamento_obra.py
 ```
-
-## Como usar a tela
-
-1. Selecione o CSV de catálogo.
-2. Selecione o CSV de itens do orçamento.
-3. Informe o percentual de imprevistos.
-4. Clique em **Calcular orçamento**.
-5. O relatório completo será exibido na caixa de texto.
-
-## Arquivos de exemplo
-
-- `catalogo_materiais_exemplo.csv`
-- `orcamento_materiais_exemplo.csv`
-
-## Resultado do relatório
-
-- detalhe por item (código, descrição, tipo, prioridade, quantidade, preço e subtotal)
-- subtotal de materiais
-- valor de imprevistos
-- total geral

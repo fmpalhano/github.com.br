@@ -6,112 +6,50 @@ from dataclasses import dataclass
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
+from src.base_materiais import BASE_MATERIAIS, MaterialBase
 
-CATALOGO_COLUNAS_OBRIGATORIAS = {
-    "ATIVACAO",
-    "LINHA_VIVA",
-    "TIPOESTR",
-    "CODLISTA",
-    "RESUMO",
-    "PRIORIDADE",
+
+@dataclass(frozen=True)
+class ItemSelecionado:
+    material: MaterialBase
+    quantidade: float
+
+    @property
+    def total(self) -> float:
+        return self.quantidade * self.material.valor_unitario
+
+
+@dataclass(frozen=True)
+class ResultadoOrcamento:
+    tipo_servico: str
+    quantidade_clientes: int
+    metros_ramal: float
+    distancia: float
+    metragem_final: float
+    quantidade_servico: float
+    valor_unitario_servico: float
+    valor_servico: float
+    itens_materiais: list[ItemSelecionado]
+
+    @property
+    def valor_materiais(self) -> float:
+        return sum(item.total for item in self.itens_materiais)
+
+    @property
+    def valor_total(self) -> float:
+        return self.valor_servico + self.valor_materiais
+
+
+SERVICOS = {
+    "Ativação": 320.0,
+    "Obra": 42.0,
+    "Lançamento de Cabo": 1850.0,
 }
 
-ITENS_COLUNAS_OBRIGATORIAS = {"CODLISTA", "QUANTIDADE", "PRECO_UNITARIO"}
 
-
-@dataclass(frozen=True)
-class MaterialCatalogo:
-    ativacao: str
-    linha_viva: str
-    tipo_estr: str
-    cod_lista: str
-    resumo: str
-    prioridade: int | None
-
-
-@dataclass(frozen=True)
-class ItemOrcamento:
-    cod_lista: str
-    quantidade: float
-    preco_unitario: float
-
-    @property
-    def subtotal(self) -> float:
-        return self.quantidade * self.preco_unitario
-
-
-@dataclass(frozen=True)
-class OrcamentoMateriais:
-    itens: list[ItemOrcamento]
-    taxa_imprevistos_percentual: float = 5.0
-
-    @property
-    def subtotal(self) -> float:
-        return sum(item.subtotal for item in self.itens)
-
-    @property
-    def valor_imprevistos(self) -> float:
-        return self.subtotal * (self.taxa_imprevistos_percentual / 100)
-
-    @property
-    def total_geral(self) -> float:
-        return self.subtotal + self.valor_imprevistos
-
-
-def _validar_colunas(obtidas: set[str], obrigatorias: set[str], arquivo: Path) -> None:
-    faltando = obrigatorias - obtidas
-    if faltando:
-        raise ValueError(
-            f"Arquivo inválido ({arquivo}). Colunas faltando: {', '.join(sorted(faltando))}"
-        )
-
-
-def _normalizar_texto(valor: str | None) -> str:
-    return (valor or "").strip()
-
-
-def carregar_catalogo_materiais(caminho_csv: Path) -> dict[str, MaterialCatalogo]:
-    with caminho_csv.open(newline="", encoding="utf-8") as arquivo:
-        leitor = csv.DictReader(arquivo)
-        _validar_colunas(set(leitor.fieldnames or []), CATALOGO_COLUNAS_OBRIGATORIAS, caminho_csv)
-
-        catalogo: dict[str, MaterialCatalogo] = {}
-        for linha in leitor:
-            codigo = _normalizar_texto(linha["CODLISTA"])
-            if not codigo:
-                continue
-            prioridade_raw = _normalizar_texto(linha["PRIORIDADE"])
-            prioridade = int(prioridade_raw) if prioridade_raw.isdigit() else None
-
-            catalogo[codigo] = MaterialCatalogo(
-                ativacao=_normalizar_texto(linha["ATIVACAO"]),
-                linha_viva=_normalizar_texto(linha["LINHA_VIVA"]),
-                tipo_estr=_normalizar_texto(linha["TIPOESTR"]),
-                cod_lista=codigo,
-                resumo=_normalizar_texto(linha["RESUMO"]),
-                prioridade=prioridade,
-            )
-    return catalogo
-
-
-def carregar_itens_orcamento(caminho_csv: Path) -> list[ItemOrcamento]:
-    with caminho_csv.open(newline="", encoding="utf-8") as arquivo:
-        leitor = csv.DictReader(arquivo)
-        _validar_colunas(set(leitor.fieldnames or []), ITENS_COLUNAS_OBRIGATORIAS, caminho_csv)
-
-        itens: list[ItemOrcamento] = []
-        for linha in leitor:
-            codigo = _normalizar_texto(linha["CODLISTA"])
-            if not codigo:
-                continue
-            itens.append(
-                ItemOrcamento(
-                    cod_lista=codigo,
-                    quantidade=float(linha["QUANTIDADE"]),
-                    preco_unitario=float(linha["PRECO_UNITARIO"]),
-                )
-            )
-    return itens
+def calcular_metragem_final(quantidade_clientes: int, metros_ramal: float) -> float:
+    metragem_base = quantidade_clientes * metros_ramal
+    return max(30.0, metragem_base) * 1.05
 
 
 def formatar_moeda(valor: float) -> str:
@@ -119,134 +57,314 @@ def formatar_moeda(valor: float) -> str:
     return "R$ " + bruto.replace(",", "X").replace(".", ",").replace("X", ".")
 
 
-def gerar_relatorio(orcamento: OrcamentoMateriais, catalogo: dict[str, MaterialCatalogo]) -> str:
-    linhas: list[str] = ["=== ORÇAMENTO DE MATERIAIS ===", "", "Itens"]
+def calcular_orcamento(
+    tipo_servico: str,
+    quantidade_clientes: int,
+    metros_ramal: float,
+    distancia: float,
+    itens_materiais: list[ItemSelecionado],
+) -> ResultadoOrcamento:
+    if tipo_servico not in SERVICOS:
+        raise ValueError("Selecione um tipo de serviço válido.")
 
-    for item in orcamento.itens:
-        material = catalogo.get(item.cod_lista)
-        if material is None:
-            descricao = "CÓDIGO NÃO ENCONTRADO NO CATÁLOGO"
-            tipo = "-"
-            prioridade = "-"
-        else:
-            descricao = material.linha_viva or material.ativacao or "SEM DESCRIÇÃO"
-            tipo = material.resumo or material.tipo_estr or "-"
-            prioridade = material.prioridade if material.prioridade is not None else "-"
+    metragem_final = calcular_metragem_final(quantidade_clientes, metros_ramal)
 
-        linhas.append(
-            f"- {item.cod_lista} | {descricao} | tipo: {tipo} | prioridade: {prioridade} | "
-            f"{item.quantidade:g} x {formatar_moeda(item.preco_unitario)} = {formatar_moeda(item.subtotal)}"
-        )
+    if tipo_servico == "Ativação":
+        quantidade_servico = float(quantidade_clientes)
+    elif tipo_servico == "Obra":
+        quantidade_servico = metragem_final
+    else:
+        quantidade_servico = metragem_final / 1000.0
+
+    valor_unitario_servico = SERVICOS[tipo_servico]
+    valor_servico = quantidade_servico * valor_unitario_servico
+
+    return ResultadoOrcamento(
+        tipo_servico=tipo_servico,
+        quantidade_clientes=quantidade_clientes,
+        metros_ramal=metros_ramal,
+        distancia=distancia,
+        metragem_final=metragem_final,
+        quantidade_servico=quantidade_servico,
+        valor_unitario_servico=valor_unitario_servico,
+        valor_servico=valor_servico,
+        itens_materiais=itens_materiais,
+    )
+
+
+def gerar_preview(resultado: ResultadoOrcamento) -> str:
+    linhas = [
+        "=== ORÇAMENTO TELECOM ===",
+        "",
+        f"Tipo de serviço: {resultado.tipo_servico}",
+        f"Quantidade de clientes: {resultado.quantidade_clientes}",
+        f"Metros por ramal: {resultado.metros_ramal:.2f}",
+        f"Distância informada: {resultado.distancia:.2f}",
+        f"Metragem final (com mínimo + 5%): {resultado.metragem_final:.2f} m",
+        "",
+        "Serviço",
+        (
+            f"- Quantidade calculada: {resultado.quantidade_servico:.4f} | "
+            f"Valor unitário: {formatar_moeda(resultado.valor_unitario_servico)} | "
+            f"Total serviço: {formatar_moeda(resultado.valor_servico)}"
+        ),
+        "",
+        "Materiais selecionados",
+    ]
+
+    if not resultado.itens_materiais:
+        linhas.append("- Nenhum material selecionado")
+    else:
+        for item in resultado.itens_materiais:
+            linhas.append(
+                f"- {item.material.codigo} | {item.material.descricao} | {item.quantidade:g} {item.material.unidade} "
+                f"x {formatar_moeda(item.material.valor_unitario)} = {formatar_moeda(item.total)}"
+            )
 
     linhas.extend(
         [
             "",
-            f"Subtotal materiais: {formatar_moeda(orcamento.subtotal)}",
-            (
-                f"Imprevistos ({orcamento.taxa_imprevistos_percentual:.2f}%): "
-                f"{formatar_moeda(orcamento.valor_imprevistos)}"
-            ),
-            f"TOTAL GERAL: {formatar_moeda(orcamento.total_geral)}",
+            f"Total serviço: {formatar_moeda(resultado.valor_servico)}",
+            f"Total materiais: {formatar_moeda(resultado.valor_materiais)}",
+            f"TOTAL GERAL: {formatar_moeda(resultado.valor_total)}",
         ]
     )
+
     return "\n".join(linhas)
 
 
-def gerar_relatorio_de_arquivos(
-    caminho_catalogo: Path, caminho_orcamento: Path, imprevistos_percentual: float
-) -> str:
-    catalogo = carregar_catalogo_materiais(caminho_catalogo)
-    itens = carregar_itens_orcamento(caminho_orcamento)
-    orcamento = OrcamentoMateriais(itens=itens, taxa_imprevistos_percentual=imprevistos_percentual)
-    return gerar_relatorio(orcamento, catalogo)
+def exportar_orcamento_csv(resultado: ResultadoOrcamento, caminho: Path) -> None:
+    with caminho.open("w", newline="", encoding="utf-8") as arquivo:
+        writer = csv.writer(arquivo)
+
+        writer.writerow(["DADOS DO SERVIÇO"])
+        writer.writerow(["Tipo de Serviço", resultado.tipo_servico])
+        writer.writerow(["Quantidade de Clientes", resultado.quantidade_clientes])
+        writer.writerow(["Metros por Ramal", f"{resultado.metros_ramal:.2f}"])
+        writer.writerow(["Distância", f"{resultado.distancia:.2f}"])
+        writer.writerow(["Metragem Final (m)", f"{resultado.metragem_final:.2f}"])
+        writer.writerow(["Quantidade de Serviço", f"{resultado.quantidade_servico:.4f}"])
+        writer.writerow(["Valor Unitário Serviço", f"{resultado.valor_unitario_servico:.2f}"])
+        writer.writerow(["Valor Serviço", f"{resultado.valor_servico:.2f}"])
+        writer.writerow([])
+
+        writer.writerow(["MATERIAIS SELECIONADOS"])
+        writer.writerow(
+            ["Código", "Descrição", "Unidade", "Quantidade", "Valor Unitário", "Total Item"]
+        )
+
+        for item in resultado.itens_materiais:
+            writer.writerow(
+                [
+                    item.material.codigo,
+                    item.material.descricao,
+                    item.material.unidade,
+                    f"{item.quantidade:.4f}",
+                    f"{item.material.valor_unitario:.2f}",
+                    f"{item.total:.2f}",
+                ]
+            )
+
+        writer.writerow([])
+        writer.writerow(["Total Materiais", f"{resultado.valor_materiais:.2f}"])
+        writer.writerow(["Total Geral", f"{resultado.valor_total:.2f}"])
+
+
+class LinhaMaterialUI:
+    def __init__(self, parent: ttk.Frame, material: MaterialBase, row_index: int) -> None:
+        self.material = material
+        self.selecionado_var = tk.BooleanVar(value=False)
+        self.quantidade_var = tk.StringVar(value="0")
+
+        self.check = ttk.Checkbutton(parent, variable=self.selecionado_var)
+        self.check.grid(row=row_index, column=0, sticky="w")
+
+        ttk.Label(parent, text=material.codigo, width=12).grid(row=row_index, column=1, sticky="w")
+        ttk.Label(parent, text=material.descricao, width=42).grid(row=row_index, column=2, sticky="w")
+        ttk.Label(parent, text=material.unidade, width=8).grid(row=row_index, column=3, sticky="w")
+        ttk.Label(parent, text=formatar_moeda(material.valor_unitario), width=14).grid(
+            row=row_index, column=4, sticky="w"
+        )
+        ttk.Entry(parent, textvariable=self.quantidade_var, width=10).grid(
+            row=row_index, column=5, sticky="w"
+        )
+
+    def para_item(self) -> ItemSelecionado | None:
+        if not self.selecionado_var.get():
+            return None
+
+        quantidade_texto = self.quantidade_var.get().strip().replace(",", ".")
+        quantidade = float(quantidade_texto)
+        if quantidade <= 0:
+            raise ValueError(f"Quantidade inválida para material {self.material.codigo}.")
+
+        return ItemSelecionado(material=self.material, quantidade=quantidade)
 
 
 class AplicativoOrcamento(tk.Tk):
     def __init__(self) -> None:
         super().__init__()
-        self.title("Orçamento de Materiais")
-        self.geometry("980x680")
+        self.title("Sistema de Orçamento Telecom")
+        self.geometry("1200x760")
 
-        self.catalogo_var = tk.StringVar()
-        self.orcamento_var = tk.StringVar()
-        self.imprevistos_var = tk.StringVar(value="5")
+        self.tipo_servico_var = tk.StringVar(value="")
+        self.qtd_clientes_var = tk.StringVar(value="1")
+        self.metros_ramal_var = tk.StringVar(value="30")
+        self.distancia_var = tk.StringVar(value="0")
+
+        self.linhas_materiais: list[LinhaMaterialUI] = []
+        self.resultado_atual: ResultadoOrcamento | None = None
 
         self._montar_interface()
 
     def _montar_interface(self) -> None:
-        container = ttk.Frame(self, padding=12)
-        container.pack(fill="both", expand=True)
+        raiz = ttk.Frame(self, padding=10)
+        raiz.pack(fill="both", expand=True)
 
-        ttk.Label(container, text="Catálogo de materiais (CSV)").grid(row=0, column=0, sticky="w")
-        ttk.Entry(container, textvariable=self.catalogo_var).grid(
-            row=1, column=0, sticky="ew", padx=(0, 8)
-        )
-        ttk.Button(container, text="Selecionar", command=self._selecionar_catalogo).grid(
-            row=1, column=1, sticky="ew"
-        )
+        topo = ttk.LabelFrame(raiz, text="Dados do Serviço", padding=10)
+        topo.pack(fill="x")
 
-        ttk.Label(container, text="Itens do orçamento (CSV)").grid(
-            row=2, column=0, sticky="w", pady=(10, 0)
+        ttk.Label(topo, text="Tipo de Serviço").grid(row=0, column=0, sticky="w")
+        combo = ttk.Combobox(
+            topo,
+            textvariable=self.tipo_servico_var,
+            values=list(SERVICOS.keys()),
+            state="readonly",
+            width=24,
         )
-        ttk.Entry(container, textvariable=self.orcamento_var).grid(
-            row=3, column=0, sticky="ew", padx=(0, 8)
-        )
-        ttk.Button(container, text="Selecionar", command=self._selecionar_orcamento).grid(
-            row=3, column=1, sticky="ew"
-        )
+        combo.grid(row=1, column=0, padx=(0, 12), sticky="w")
 
-        ttk.Label(container, text="Imprevistos (%)").grid(row=4, column=0, sticky="w", pady=(10, 0))
-        ttk.Entry(container, textvariable=self.imprevistos_var, width=12).grid(
-            row=5, column=0, sticky="w"
+        ttk.Label(topo, text="Quantidade de Clientes").grid(row=0, column=1, sticky="w")
+        ttk.Entry(topo, textvariable=self.qtd_clientes_var, width=16).grid(
+            row=1, column=1, padx=(0, 12), sticky="w"
         )
 
-        ttk.Button(container, text="Calcular orçamento", command=self._calcular).grid(
-            row=5, column=1, sticky="ew"
+        ttk.Label(topo, text="Metros por Ramal").grid(row=0, column=2, sticky="w")
+        ttk.Entry(topo, textvariable=self.metros_ramal_var, width=16).grid(
+            row=1, column=2, padx=(0, 12), sticky="w"
         )
 
-        self.relatorio_text = tk.Text(container, wrap="word")
-        self.relatorio_text.grid(row=6, column=0, columnspan=2, sticky="nsew", pady=(12, 0))
+        ttk.Label(topo, text="Distância").grid(row=0, column=3, sticky="w")
+        ttk.Entry(topo, textvariable=self.distancia_var, width=16).grid(row=1, column=3, sticky="w")
 
-        scrollbar = ttk.Scrollbar(container, orient="vertical", command=self.relatorio_text.yview)
-        scrollbar.grid(row=6, column=2, sticky="ns", pady=(12, 0))
-        self.relatorio_text.configure(yscrollcommand=scrollbar.set)
+        materiais_box = ttk.LabelFrame(raiz, text="Base Interna de Materiais", padding=8)
+        materiais_box.pack(fill="both", expand=True, pady=(8, 8))
 
-        container.columnconfigure(0, weight=1)
-        container.columnconfigure(1, weight=0)
-        container.rowconfigure(6, weight=1)
+        canvas = tk.Canvas(materiais_box, height=300)
+        scrollbar = ttk.Scrollbar(materiais_box, orient="vertical", command=canvas.yview)
+        quadro_lista = ttk.Frame(canvas)
 
-    def _selecionar_catalogo(self) -> None:
-        arquivo = filedialog.askopenfilename(
-            title="Selecione o catálogo de materiais",
-            filetypes=[("CSV", "*.csv"), ("Todos os arquivos", "*.*")],
+        quadro_lista.bind(
+            "<Configure>", lambda _e: canvas.configure(scrollregion=canvas.bbox("all"))
         )
-        if arquivo:
-            self.catalogo_var.set(arquivo)
+        canvas.create_window((0, 0), window=quadro_lista, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
 
-    def _selecionar_orcamento(self) -> None:
-        arquivo = filedialog.askopenfilename(
-            title="Selecione os itens do orçamento",
-            filetypes=[("CSV", "*.csv"), ("Todos os arquivos", "*.*")],
+        canvas.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+
+        ttk.Label(quadro_lista, text="Sel", width=4).grid(row=0, column=0, sticky="w")
+        ttk.Label(quadro_lista, text="Código", width=12).grid(row=0, column=1, sticky="w")
+        ttk.Label(quadro_lista, text="Descrição", width=42).grid(row=0, column=2, sticky="w")
+        ttk.Label(quadro_lista, text="Un", width=8).grid(row=0, column=3, sticky="w")
+        ttk.Label(quadro_lista, text="Valor Unitário", width=14).grid(row=0, column=4, sticky="w")
+        ttk.Label(quadro_lista, text="Quantidade", width=12).grid(row=0, column=5, sticky="w")
+
+        for idx, material in enumerate(BASE_MATERIAIS, start=1):
+            linha = LinhaMaterialUI(quadro_lista, material, idx)
+            self.linhas_materiais.append(linha)
+
+        acoes = ttk.Frame(raiz)
+        acoes.pack(fill="x", pady=(0, 8))
+
+        ttk.Button(acoes, text="Calcular Orçamento", command=self._calcular).pack(side="left")
+        self.botao_exportar = ttk.Button(
+            acoes, text="Exportar para Planilha", command=self._exportar, state="disabled"
         )
-        if arquivo:
-            self.orcamento_var.set(arquivo)
+        self.botao_exportar.pack(side="left", padx=(8, 0))
+        ttk.Button(acoes, text="Limpar", command=self._limpar).pack(side="left", padx=(8, 0))
+
+        preview_box = ttk.LabelFrame(raiz, text="Preview do Orçamento", padding=8)
+        preview_box.pack(fill="both", expand=True)
+
+        self.preview_text = tk.Text(preview_box, wrap="word", height=12)
+        self.preview_text.pack(side="left", fill="both", expand=True)
+        preview_scroll = ttk.Scrollbar(preview_box, orient="vertical", command=self.preview_text.yview)
+        preview_scroll.pack(side="right", fill="y")
+        self.preview_text.configure(yscrollcommand=preview_scroll.set)
+
+    def _coletar_itens(self) -> list[ItemSelecionado]:
+        itens: list[ItemSelecionado] = []
+        for linha in self.linhas_materiais:
+            item = linha.para_item()
+            if item is not None:
+                itens.append(item)
+        return itens
 
     def _calcular(self) -> None:
         try:
-            catalogo_path = Path(self.catalogo_var.get().strip())
-            orcamento_path = Path(self.orcamento_var.get().strip())
-            imprevistos = float(self.imprevistos_var.get().strip().replace(",", "."))
+            tipo_servico = self.tipo_servico_var.get().strip()
+            if not tipo_servico:
+                raise ValueError("Selecione um tipo de serviço antes de calcular.")
 
-            if not catalogo_path.exists():
-                raise ValueError("Selecione um catálogo CSV válido.")
-            if not orcamento_path.exists():
-                raise ValueError("Selecione um arquivo de orçamento CSV válido.")
+            quantidade_clientes = int(self.qtd_clientes_var.get().strip())
+            metros_ramal = float(self.metros_ramal_var.get().strip().replace(",", "."))
+            distancia = float(self.distancia_var.get().strip().replace(",", "."))
 
-            relatorio = gerar_relatorio_de_arquivos(catalogo_path, orcamento_path, imprevistos)
-            self.relatorio_text.delete("1.0", tk.END)
-            self.relatorio_text.insert(tk.END, relatorio)
+            if quantidade_clientes <= 0:
+                raise ValueError("Quantidade de clientes deve ser maior que zero.")
+            if metros_ramal <= 0:
+                raise ValueError("Metros por ramal deve ser maior que zero.")
+
+            itens = self._coletar_itens()
+
+            self.resultado_atual = calcular_orcamento(
+                tipo_servico=tipo_servico,
+                quantidade_clientes=quantidade_clientes,
+                metros_ramal=metros_ramal,
+                distancia=distancia,
+                itens_materiais=itens,
+            )
+
+            self.preview_text.delete("1.0", tk.END)
+            self.preview_text.insert(tk.END, gerar_preview(self.resultado_atual))
+            self.botao_exportar.configure(state="normal")
         except Exception as exc:
-            messagebox.showerror("Erro ao calcular orçamento", str(exc))
+            self.botao_exportar.configure(state="disabled")
+            messagebox.showerror("Erro no cálculo", str(exc))
+
+    def _exportar(self) -> None:
+        if self.resultado_atual is None:
+            messagebox.showwarning("Exportação", "Calcule o orçamento antes de exportar.")
+            return
+
+        caminho = filedialog.asksaveasfilename(
+            title="Exportar orçamento",
+            defaultextension=".csv",
+            filetypes=[("CSV", "*.csv")],
+        )
+        if not caminho:
+            return
+
+        try:
+            exportar_orcamento_csv(self.resultado_atual, Path(caminho))
+            messagebox.showinfo("Exportação", "Planilha exportada com sucesso.")
+        except Exception as exc:
+            messagebox.showerror("Erro na exportação", str(exc))
+
+    def _limpar(self) -> None:
+        self.tipo_servico_var.set("")
+        self.qtd_clientes_var.set("1")
+        self.metros_ramal_var.set("30")
+        self.distancia_var.set("0")
+
+        for linha in self.linhas_materiais:
+            linha.selecionado_var.set(False)
+            linha.quantidade_var.set("0")
+
+        self.resultado_atual = None
+        self.botao_exportar.configure(state="disabled")
+        self.preview_text.delete("1.0", tk.END)
 
 
 def main() -> int:
