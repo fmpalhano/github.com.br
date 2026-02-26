@@ -24,7 +24,7 @@ Agora o programa roda em **uma interface única Tkinter** (desktop), focada apen
 
 ### Opção 1 (Windows): arquivo `.bat`
 
-Clique duas vezes em `executar_orcamento.bat`.
+Clique duas vezes em `executar_orcamento.bat` (ele abre o app Tkinter em janela única e, quando disponível, sem terminal).
 
 ### Opção 2 (terminal)
 
