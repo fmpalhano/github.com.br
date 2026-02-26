@@ -77,6 +77,6 @@ Ele gera um executável **independente** em `dist\OrcamentoObraEletrica.exe` (se
 
 ### Observacoes de build do EXE
 
-- O build usa como entrada `src\orcamento_obra.py` (nao usa `-m`), que e o formato correto do PyInstaller.
+- O build usa como entrada `src\orcamento_obra.py` e invoca `python -m PyInstaller` (nao depende do executavel `pyinstaller` no PATH).
 - O script limpa `build/`, `dist/` e `.spec` antes de gerar para evitar residuos de builds anteriores.
 - Em caso de erro, o `gerar_exe.bat` finaliza com codigo de falha (`exit /b 1`).

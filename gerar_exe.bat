@@ -3,20 +3,31 @@ setlocal
 
 cd /d "%~dp0"
 
-echo [1/3] Verificando PyInstaller...
-where pyinstaller >nul 2>nul
+echo [1/4] Verificando Python...
+python --version >nul 2>nul
 if not %errorlevel%==0 (
-    echo PyInstaller nao encontrado. Instalando...
-    python -m pip install pyinstaller
+    echo Python nao encontrado no PATH.
+    exit /b 1
 )
 
-echo [2/3] Limpando build anterior...
+echo [2/4] Verificando modulo PyInstaller...
+python -m PyInstaller --version >nul 2>nul
+if not %errorlevel%==0 (
+    echo PyInstaller nao encontrado neste Python. Instalando...
+    python -m pip install --user pyinstaller
+    if not %errorlevel%==0 (
+        echo Falha ao instalar PyInstaller.
+        exit /b 1
+    )
+)
+
+echo [3/4] Limpando build anterior...
 if exist build rmdir /s /q build
 if exist dist rmdir /s /q dist
 if exist OrcamentoObraEletrica.spec del /q OrcamentoObraEletrica.spec
 
-echo [3/3] Gerando EXE standalone...
-pyinstaller ^
+echo [4/4] Gerando EXE standalone...
+python -m PyInstaller ^
   --noconfirm ^
   --clean ^
   --onefile ^
