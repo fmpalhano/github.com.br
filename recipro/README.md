@@ -14,10 +14,36 @@ uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 
 ## Rodar localmente (Windows com 1 clique)
 
+## Launcher automático no Windows (BAT/PowerShell)
+
+### Opção 1 — BAT (duplo clique)
+- Arquivo: `run_recipro.bat`
+- O script:
+  - detecta Python 3.10+
+  - cria/usa `venv` no diretório do projeto
+  - instala dependências na primeira execução
+  - inicia o FastAPI em `http://127.0.0.1:8000` com reload
+
+### Opção 2 — PowerShell
+```powershell
+powershell -ExecutionPolicy Bypass -File .\run_recipro.ps1
+```
+
+### Variáveis úteis
+- `FORCE_INSTALL=1` força reinstalação das dependências
+- `AUTO_RESTART=1` reinicia o servidor automaticamente se cair
+
+Exemplo (Prompt de Comando):
+```bat
+set FORCE_INSTALL=1
+set AUTO_RESTART=1
+run_recipro.bat
+```
+
 1. Abra a pasta `recipro`.
 2. Dê duplo clique em `run_recipro.bat`.
-3. O script cria/usa `.venv`, instala dependências e inicia o servidor.
-4. O launcher tenta Python na ordem: `3.11` → `3.10` → `3.x` padrão (`py -3`) → `python`.
+3. O script cria/usa `venv`, instala dependências e inicia o servidor.
+4. O launcher tenta Python na ordem: `3.14` → `3.13` → `3.12` → `3.11` → `3.10` → `python`.
 5. Na primeira execução ele instala dependências; nas próximas, ele detecta instalação pronta e inicia mais rápido.
 6. Para forçar reinstalação: `set FORCE_INSTALL=1 && run_recipro.bat`.
 
