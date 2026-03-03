@@ -83,6 +83,9 @@ if "!NEED_INSTALL!"=="1" (
     echo [INFO] Dependencias ja instaladas.>> "!LOGFILE!"
 )
 
+python -c "import fastapi,uvicorn,pandas,spacy,textblob,sqlalchemy,reportlab; import main; print('[INFO] Imports OK')" >> "!LOGFILE!" 2>&1
+if errorlevel 1 goto :runtime_fail
+
 for /f "tokens=2 delims=:" %%A in ('ipconfig ^| findstr /R /C:"IPv4"') do (
     set IP=%%A
     goto :foundip
@@ -110,6 +113,14 @@ python -m uvicorn main:app --host 0.0.0.0 --port 8000 --reload >> "!LOGFILE!" 2>
 if errorlevel 1 goto :fail
 
 goto :eof
+
+:runtime_fail
+echo.
+echo [ERRO] Dependencias instaladas, mas a aplicacao nao conseguiu importar modulos.
+echo [ERRO] Veja o log para a stack trace: !LOGFILE!
+echo [ERRO] Falha ao importar app/modulos.>> "!LOGFILE!"
+pause
+exit /b 1
 
 :install_fail
 echo.

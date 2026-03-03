@@ -26,6 +26,7 @@ uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 
 - Cada execução do `run_recipro.bat` gera um log em `recipro/logs/` com nome no formato `run_YYYYMMDD_HHMMSS.log`.
 - Se o servidor não subir, abra esse arquivo e me envie o conteúdo para diagnóstico.
+- O launcher agora valida import dos módulos críticos (`fastapi`, `uvicorn`, `pandas`, `spacy`, `textblob`, `sqlalchemy`, `reportlab`, `main`) antes de subir o servidor e aponta erro no log se algo estiver inconsistente.
 
 ## Testar no celular (100% web)
 
@@ -58,6 +59,7 @@ http://192.168.0.15:8000
 
 ### Se aparecer `ERROR: Operation cancelled by user`
 
+- Se ainda não abrir após instalar Python, rode `set FORCE_INSTALL=1 && run_recipro.bat` para reinstalar dependências e regenerar o ambiente.
 - Isso significa que a instalação do `pip` foi interrompida manualmente.
 - Execute `run_recipro.bat` novamente e aguarde até o final da instalação.
 - Depois da primeira instalação completa, as próximas execuções não reinstalam tudo.

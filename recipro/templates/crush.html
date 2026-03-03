@@ -55,7 +55,7 @@ if (hpData.length) {
   new Chart(document.getElementById('hpChart'), {type:'line', data:{labels:hpData.map(x=>x.date), datasets:[{label:'Interesse Real', data:hpData.map(x=>x.hp), borderColor:'#38bdf8'}]}});
 }
 {% if latest %}
-const week = {{ latest.week|tojson|safe }};
+const week = {{ latest.weekly|tojson|safe }};
 if (week.length) {
   const labels = week.map(x=>x.week);
   const keys = [...new Set(week.flatMap(w=>Object.keys(w).filter(k=>k!=='week')))];
