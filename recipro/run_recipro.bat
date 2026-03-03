@@ -1,64 +1,72 @@
 @echo off
 setlocal EnableExtensions EnableDelayedExpansion
 
-:: ==========================================================
-:: Recipro Evolution - Windows Launcher (BAT)
-:: - Detecta Python 3.10+
-:: - Cria/usa venv em %PROJECT_DIR%\venv
-:: - Instala dependências (na 1ª vez ou quando forçado)
-:: - Sobe FastAPI com uvicorn em http://127.0.0.1:8000
-:: - Opcional: restart automático (AUTO_RESTART=1)
-:: ==========================================================
+REM ==============================================================
+REM  Recipro Evolution - Launcher Oficial Windows (duplo clique)
+REM ==============================================================
+REM  O que este script faz:
+REM  1) Detecta Python 3.10+
+REM  2) Cria/ativa venv em .\venv
+REM  3) Instala requirements (apenas quando necessário)
+REM  4) Inicia uvicorn em http://127.0.0.1:8000 --reload
+REM  5) Salva log completo em .\logs\run_YYYYMMDD_HHMMSS.log
+REM
+REM  Configurações rápidas:
+REM    set FORCE_INSTALL=1    -> força reinstalar dependências
+REM    set AUTO_RESTART=1     -> reinicia servidor automaticamente
+REM ============================================================== 
 
-:: [CONFIG] Diretório do projeto (edite se necessário)
-set "PROJECT_DIR=C:\Users\SABRINA\Desktop\github.com.br-codex-create-web-app-recipro-evolution\recipro"
+REM [CONFIG] Diretório do projeto (por padrão: pasta do script)
+set "PROJECT_DIR=%~dp0"
+for %%i in ("%PROJECT_DIR%") do set "PROJECT_DIR=%%~fi"
 
-:: [CONFIG] Nome do ambiente virtual
+REM [CONFIG] Nome da virtualenv
 set "VENV_NAME=venv"
 
-:: [CONFIG] Endpoint e app
+REM [CONFIG] App/host/porta
 set "APP_MODULE=main:app"
 set "HOST=127.0.0.1"
 set "PORT=8000"
 
-:: [CONFIG] Reinício automático quando servidor cai (0=desligado, 1=ligado)
+REM [CONFIG] Flags opcionais
+if "%FORCE_INSTALL%"=="" set "FORCE_INSTALL=0"
 if "%AUTO_RESTART%"=="" set "AUTO_RESTART=0"
 
-:: [CONFIG] Forçar reinstalação de dependências (0/1)
-if "%FORCE_INSTALL%"=="" set "FORCE_INSTALL=0"
-
-:: [CONFIG] Saída mais limpa do pip
-set "PIP_FLAGS=--disable-pip-version-check --no-input --quiet"
-
-:: Fallback: se PROJECT_DIR não existir, usa pasta do script
-if not exist "%PROJECT_DIR%" (
-  set "PROJECT_DIR=%~dp0"
-)
-
-for %%i in ("%PROJECT_DIR%") do set "PROJECT_DIR=%%~fi"
 set "VENV_DIR=%PROJECT_DIR%\%VENV_NAME%"
 set "REQ_FILE=%PROJECT_DIR%\requirements.txt"
 set "STAMP_FILE=%VENV_DIR%\.deps_installed"
+set "LOG_DIR=%PROJECT_DIR%\logs"
+
+if not exist "%LOG_DIR%" mkdir "%LOG_DIR%"
+for /f %%i in ('powershell -NoProfile -Command "Get-Date -Format yyyyMMdd_HHmmss"') do set "TS=%%i"
+set "LOG_FILE=%LOG_DIR%\run_%TS%.log"
 
 cd /d "%PROJECT_DIR%" || goto :fatal
 
-call :banner
-call :detect_python || goto :fatal
-call :setup_venv || goto :fatal
-call :install_deps || goto :fatal
-call :run_server
-exit /b 0
+call :log "=============================================================="
+call :log "Recipro Evolution - Inicializacao"
+call :log "Projeto: %PROJECT_DIR%"
+call :log "Log: %LOG_FILE%"
+call :log "=============================================================="
 
-:banner
-echo ================================================
-echo Recipro Evolution - Launcher Windows
-echo Projeto: %PROJECT_DIR%
-echo ================================================
+echo [1/5] Detectando Python 3.10+...
+call :detect_python || goto :fatal
+
+echo [2/5] Preparando ambiente virtual...
+call :prepare_venv || goto :fatal
+
+echo [3/5] Instalando dependencias (se necessario)...
+call :install_requirements || goto :fatal
+
+echo [4/5] Validando imports criticos...
+call :validate_imports || goto :fatal
+
+echo [5/5] Rodando servidor...
+call :run_server
 exit /b 0
 
 :detect_python
 set "PY_CMD="
-echo [1/4] Detectando Python 3.10+...
 
 where py >nul 2>nul
 if %errorlevel%==0 (
@@ -76,67 +84,113 @@ if not defined PY_CMD (
 
 if not defined PY_CMD (
   echo [ERRO] Python 3.10+ nao encontrado.
-  echo [ERRO] Instale Python e marque "Add python.exe to PATH".
+  call :log "[ERRO] Python 3.10+ nao encontrado."
   exit /b 1
 )
 
 for /f "delims=" %%v in ('%PY_CMD% -c "import sys; print(sys.version.split()[0])"') do set "PY_VER=%%v"
+
 echo [OK] Python selecionado: %PY_CMD% (versao %PY_VER%)
+call :log "[OK] Python selecionado: %PY_CMD% (versao %PY_VER%)"
 exit /b 0
 
-:setup_venv
-echo [2/4] Ativando ambiente...
+:prepare_venv
 if not exist "%VENV_DIR%\Scripts\python.exe" (
   echo [INFO] Criando venv em "%VENV_DIR%"...
-  %PY_CMD% -m venv "%VENV_DIR%" || exit /b 1
+  call :log "[INFO] Criando venv em %VENV_DIR%"
+  %PY_CMD% -m venv "%VENV_DIR%" >> "%LOG_FILE%" 2>&1
+  if errorlevel 1 (
+    call :log "[ERRO] Falha ao criar venv"
+    exit /b 1
+  )
 ) else (
   echo [OK] venv ja existe.
+  call :log "[OK] venv ja existe"
 )
 
-call "%VENV_DIR%\Scripts\activate.bat" || exit /b 1
-echo [OK] Ambiente ativo: %VENV_DIR%
-exit /b 0
-
-:install_deps
-if not exist "%REQ_FILE%" (
-  echo [ERRO] Arquivo requirements.txt nao encontrado em: %REQ_FILE%
+call "%VENV_DIR%\Scripts\activate.bat" >> "%LOG_FILE%" 2>&1
+if errorlevel 1 (
+  call :log "[ERRO] Falha ao ativar venv"
   exit /b 1
 )
 
-echo [3/4] Verificando dependencias...
+echo [OK] Ambiente ativo: %VENV_DIR%
+call :log "[OK] Ambiente ativo: %VENV_DIR%"
+exit /b 0
+
+:install_requirements
+if not exist "%REQ_FILE%" (
+  echo [ERRO] requirements.txt nao encontrado.
+  call :log "[ERRO] requirements.txt nao encontrado em %REQ_FILE%"
+  exit /b 1
+)
+
 if "%FORCE_INSTALL%"=="1" del /f /q "%STAMP_FILE%" >nul 2>nul
 
 if exist "%STAMP_FILE%" (
-  echo [OK] Dependencias ja instaladas. (use FORCE_INSTALL=1 para reinstalar)
+  echo [OK] Dependencias ja instaladas.
+  call :log "[OK] Dependencias ja instaladas (STAMP_FILE presente)"
   exit /b 0
 )
 
-echo [INFO] Instalando dependencias...
-python -m pip install %PIP_FLAGS% --upgrade pip || exit /b 1
-python -m pip install %PIP_FLAGS% -r "%REQ_FILE%" || exit /b 1
+echo [INFO] Instalando dependencias... (primeira execucao pode demorar)
+call :log "[INFO] Instalando dependencias"
+python -m pip install --disable-pip-version-check --no-input --upgrade pip >> "%LOG_FILE%" 2>&1
+if errorlevel 1 (
+  call :log "[ERRO] Falha no upgrade do pip"
+  exit /b 1
+)
+
+python -m pip install --disable-pip-version-check --no-input -r "%REQ_FILE%" >> "%LOG_FILE%" 2>&1
+if errorlevel 1 (
+  call :log "[ERRO] Falha ao instalar requirements"
+  exit /b 1
+)
 
 echo ok> "%STAMP_FILE%"
-echo [OK] Dependencias instaladas.
+echo [OK] Dependencias instaladas com sucesso.
+call :log "[OK] Dependencias instaladas"
+exit /b 0
+
+:validate_imports
+python -c "import fastapi,uvicorn,pandas,spacy,textblob,sqlalchemy,reportlab; import main; print('IMPORT_OK')" >> "%LOG_FILE%" 2>&1
+if errorlevel 1 (
+  echo [ERRO] Falha ao importar modulos da aplicacao.
+  call :log "[ERRO] Falha ao importar modulos da aplicacao"
+  exit /b 1
+)
+
+echo [OK] Imports criticos validados.
+call :log "[OK] Imports criticos validados"
 exit /b 0
 
 :run_server
-echo [4/4] Rodando servidor...
-echo [OK] Endpoint ativo: http://%HOST%:%PORT%
-echo [INFO] CTRL+C para parar.
+echo [OK] Endpoint: http://%HOST%:%PORT%
+echo [INFO] Para parar: CTRL+C
+call :log "[OK] Endpoint: http://%HOST%:%PORT%"
 
 :server_loop
-python -m uvicorn %APP_MODULE% --host %HOST% --port %PORT% --reload
-set "UVICORN_EXIT=%errorlevel%"
+python -m uvicorn %APP_MODULE% --host %HOST% --port %PORT% --reload >> "%LOG_FILE%" 2>&1
+set "UV_EXIT=%errorlevel%"
+call :log "[WARN] Uvicorn encerrou com codigo %UV_EXIT%"
 
 if "%AUTO_RESTART%"=="1" (
-  echo [WARN] Servidor encerrou com codigo %UVICORN_EXIT%. Reiniciando em 2s...
+  echo [WARN] Servidor caiu (codigo %UV_EXIT%). Reiniciando em 2s...
   timeout /t 2 /nobreak >nul
   goto :server_loop
 )
 
-exit /b %UVICORN_EXIT%
+exit /b %UV_EXIT%
+
+:log
+echo %~1
+echo %~1>> "%LOG_FILE%"
+exit /b 0
 
 :fatal
 echo.
 echo [FALHA] Nao foi possivel iniciar o Recipro Evolution.
+echo [FALHA] Veja o log: %LOG_FILE%
+if defined LOG_FILE echo [FALHA] Inicializacao interrompida>> "%LOG_FILE%"
+pause
 exit /b 1

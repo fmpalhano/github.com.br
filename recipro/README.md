@@ -89,3 +89,35 @@ http://192.168.0.15:8000
 - Isso significa que a instalação do `pip` foi interrompida manualmente.
 - Execute `run_recipro.bat` novamente e aguarde até o final da instalação.
 - Depois da primeira instalação completa, as próximas execuções não reinstalam tudo.
+
+
+## BAT oficial (entrega final)
+
+Arquivo: `run_recipro.bat`
+
+### Como usar (duplo clique)
+1. Abra a pasta `recipro`.
+2. Dê duplo clique em `run_recipro.bat`.
+3. Aguarde as etapas `1/5` até `5/5`.
+
+### O que ele mostra no terminal
+- Python selecionado
+- Status da venv
+- Status da instalação de dependências
+- Endpoint ativo (`http://127.0.0.1:8000`)
+
+### Ajustes rápidos
+- Forçar reinstalação:
+```bat
+set FORCE_INSTALL=1
+run_recipro.bat
+```
+- Reinício automático se cair:
+```bat
+set AUTO_RESTART=1
+run_recipro.bat
+```
+
+### Log detalhado
+- Caminho: `recipro\logs\run_YYYYMMDD_HHMMSS.log`
+- Se falhar, envie esse arquivo para diagnóstico.
