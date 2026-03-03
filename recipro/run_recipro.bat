@@ -73,7 +73,7 @@ if "%FORCE_INSTALL%"=="1" del /f /q "%STAMP_FILE%" >nul 2>nul
 if exist "%STAMP_FILE%" (
   echo [OK] Dependencies already installed.
 ) else (
-  echo [INFO] Installing dependencies (first run may take some time) ...
+  echo [INFO] Installing dependencies - first run may take some time ...
   python -m pip install --disable-pip-version-check --no-input --upgrade pip >> "%LOG_FILE%" 2>&1
   if errorlevel 1 goto fatal
   python -m pip install --disable-pip-version-check --no-input -r "%REQ_FILE%" >> "%LOG_FILE%" 2>&1
@@ -99,7 +99,7 @@ python -m uvicorn %APP_MODULE% --host %HOST% --port %PORT% --reload >> "%LOG_FIL
 set "UV_EXIT=%errorlevel%"
 echo [WARN] Uvicorn exited with code %UV_EXIT%>> "%LOG_FILE%"
 if "%AUTO_RESTART%"=="1" (
-  echo [WARN] Server stopped (code %UV_EXIT%). Restarting in 2s ...
+  echo [WARN] Server stopped, code %UV_EXIT%. Restarting in 2s ...
   timeout /t 2 /nobreak >nul
   goto server_loop
 )

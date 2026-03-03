@@ -126,3 +126,5 @@ run_recipro.bat
 ### Correção do erro "nao pode localizar o rotulo em lote"
 - O `run_recipro.bat` foi refeito em formato ASCII + CRLF e sem `call :run_server`.
 - Agora o servidor inicia por fluxo direto com rótulo único `:server_loop`, evitando o erro de rótulo ausente.
+
+- Corrigido erro `... foi inesperado neste momento.` no BAT (causado por parênteses em mensagens dentro de bloco `if`).
