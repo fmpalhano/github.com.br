@@ -18,6 +18,12 @@ uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 2. Dê duplo clique em `run_recipro.bat`.
 3. O script cria/usa `.venv`, instala dependências e inicia o servidor.
 
+
+## Logs de execução (Windows)
+
+- Cada execução do `run_recipro.bat` gera um log em `recipro/logs/` com nome no formato `run_YYYYMMDD_HHMMSS.log`.
+- Se o servidor não subir, abra esse arquivo e me envie o conteúdo para diagnóstico.
+
 ## Testar no celular (100% web)
 
 1. Conecte **PC e celular na mesma rede Wi‑Fi**.
