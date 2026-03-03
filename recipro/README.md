@@ -121,3 +121,8 @@ run_recipro.bat
 ### Log detalhado
 - Caminho: `recipro\logs\run_YYYYMMDD_HHMMSS.log`
 - Se falhar, envie esse arquivo para diagnóstico.
+
+
+### Correção do erro "nao pode localizar o rotulo em lote"
+- O `run_recipro.bat` foi refeito em formato ASCII + CRLF e sem `call :run_server`.
+- Agora o servidor inicia por fluxo direto com rótulo único `:server_loop`, evitando o erro de rótulo ausente.
