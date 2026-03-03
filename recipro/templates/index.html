@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="text-center py-10">
+  <h1 class="text-4xl font-bold mb-4">Descubra o nível real de reciprocidade no seu relacionamento.</h1>
+  <p class="text-sky-300 text-lg">Transformamos conversas em métricas emocionais claras e acionáveis.</p>
+</section>
+
+<div x-data="{open:false}" class="mb-6 text-right">
+  <button @click="open=true" class="bg-sky-400 text-slate-900 font-semibold px-4 py-2 rounded-lg hover:bg-sky-300 transition">Adicionar Crush</button>
+  <div x-show="open" class="fixed inset-0 bg-black/50 flex items-center justify-center" style="display:none">
+    <form method="post" action="/crush" class="bg-slate-800 p-6 rounded-lg w-80 space-y-3">
+      <h2 class="text-xl font-semibold">Novo Crush</h2>
+      <input name="name" class="w-full p-2 rounded bg-slate-700" placeholder="Nome" required>
+      <div class="flex gap-2 justify-end">
+        <button type="button" @click="open=false" class="px-3 py-1 bg-slate-600 rounded">Cancelar</button>
+        <button type="submit" class="px-3 py-1 bg-sky-400 text-slate-900 rounded">Salvar</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="grid md:grid-cols-2 gap-4">
+  {% for card in cards %}
+  <div class="bg-slate-800 p-5 rounded-xl shadow hover:-translate-y-0.5 transition">
+    <div class="flex justify-between items-center">
+      <h3 class="text-2xl font-semibold">{{ card.crush.nome }}</h3>
+      <span class="text-sky-300">HP {{ card.hp }}</span>
+    </div>
+    <div class="my-3 hearts">
+      {% for h in card.hearts %}
+        <span class="heart {{ h }}">❤</span>
+      {% endfor %}
+    </div>
+    <p class="text-sm text-slate-300">Última análise: {{ card.latest.data_analise.strftime('%d/%m/%Y %H:%M') if card.latest else 'Sem análises' }}</p>
+    <div class="mt-4 flex gap-2">
+      <a href="/crush/{{ card.crush.id }}" class="px-3 py-2 bg-sky-400 text-slate-900 rounded">Ver Evolução</a>
+      <a href="/crush/{{ card.crush.id }}" class="px-3 py-2 bg-slate-700 rounded">Nova Análise</a>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endblock %}
