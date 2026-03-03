@@ -17,6 +17,7 @@ uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 1. Abra a pasta `recipro`.
 2. Dê duplo clique em `run_recipro.bat`.
 3. O script cria/usa `.venv`, instala dependências e inicia o servidor.
+4. O launcher tenta Python na ordem: `3.11` → `3.10` → `3.x` padrão (`py -3`) → `python`.
 
 
 ## Logs de execução (Windows)
