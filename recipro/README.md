@@ -18,6 +18,8 @@ uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 2. Dê duplo clique em `run_recipro.bat`.
 3. O script cria/usa `.venv`, instala dependências e inicia o servidor.
 4. O launcher tenta Python na ordem: `3.11` → `3.10` → `3.x` padrão (`py -3`) → `python`.
+5. Na primeira execução ele instala dependências; nas próximas, ele detecta instalação pronta e inicia mais rápido.
+6. Para forçar reinstalação: `set FORCE_INSTALL=1 && run_recipro.bat`.
 
 
 ## Logs de execução (Windows)
@@ -52,3 +54,10 @@ http://192.168.0.15:8000
 
 - O arquivo `.txt` é apagado após o processamento.
 - Mensagens não são armazenadas; apenas métricas agregadas são persistidas.
+
+
+### Se aparecer `ERROR: Operation cancelled by user`
+
+- Isso significa que a instalação do `pip` foi interrompida manualmente.
+- Execute `run_recipro.bat` novamente e aguarde até o final da instalação.
+- Depois da primeira instalação completa, as próximas execuções não reinstalam tudo.

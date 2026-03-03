@@ -24,30 +24,22 @@ if %errorlevel%==0 (
     py -0p >> "!LOGFILE!" 2>&1
 
     py -3.11 -c "import sys" >nul 2>nul
-    if !errorlevel! == 0 (
-        set PY_CMD=py -3.11
-    )
+    if !errorlevel! == 0 set PY_CMD=py -3.11
 
     if not defined PY_CMD (
         py -3.10 -c "import sys" >nul 2>nul
-        if !errorlevel! == 0 (
-            set PY_CMD=py -3.10
-        )
+        if !errorlevel! == 0 set PY_CMD=py -3.10
     )
 
     if not defined PY_CMD (
         py -3 -c "import sys" >nul 2>nul
-        if !errorlevel! == 0 (
-            set PY_CMD=py -3
-        )
+        if !errorlevel! == 0 set PY_CMD=py -3
     )
 )
 
 if not defined PY_CMD (
     where python >nul 2>nul
-    if %errorlevel%==0 (
-        set PY_CMD=python
-    )
+    if %errorlevel%==0 set PY_CMD=python
 )
 
 if not defined PY_CMD (
@@ -72,11 +64,24 @@ if not exist ".venv\Scripts\python.exe" (
 call ".venv\Scripts\activate" >> "!LOGFILE!" 2>&1
 if errorlevel 1 goto :fail
 
-python -m pip install --upgrade pip >> "!LOGFILE!" 2>&1
-if errorlevel 1 goto :fail
+set NEED_INSTALL=0
+if not exist ".venv\.deps_installed" set NEED_INSTALL=1
+if /I "%FORCE_INSTALL%"=="1" set NEED_INSTALL=1
 
-python -m pip install -r requirements.txt >> "!LOGFILE!" 2>&1
-if errorlevel 1 goto :fail
+if "!NEED_INSTALL!"=="1" (
+    echo [INFO] Instalando/atualizando dependencias (primeira execucao pode demorar)...
+    echo [INFO] Instalando/atualizando dependencias...>> "!LOGFILE!"
+    python -m pip install --upgrade pip >> "!LOGFILE!" 2>&1
+    if errorlevel 1 goto :install_fail
+
+    python -m pip install -r requirements.txt >> "!LOGFILE!" 2>&1
+    if errorlevel 1 goto :install_fail
+
+    echo ok> ".venv\.deps_installed"
+) else (
+    echo [INFO] Dependencias ja instaladas. Pulando pip install.
+    echo [INFO] Dependencias ja instaladas.>> "!LOGFILE!"
+)
 
 for /f "tokens=2 delims=:" %%A in ('ipconfig ^| findstr /R /C:"IPv4"') do (
     set IP=%%A
@@ -97,6 +102,7 @@ echo PC:       http://127.0.0.1:8000
 echo Celular:  http://!IP!:8000
 echo =============================================
 echo [INFO] Logs em: !LOGFILE!
+echo [DICA] Para forcar reinstalacao: set FORCE_INSTALL=1 ^& run_recipro.bat
 echo.
 
 echo [INFO] Uvicorn em execucao... (CTRL+C para parar)
@@ -104,6 +110,15 @@ python -m uvicorn main:app --host 0.0.0.0 --port 8000 --reload >> "!LOGFILE!" 2>
 if errorlevel 1 goto :fail
 
 goto :eof
+
+:install_fail
+echo.
+echo [ERRO] Falha ao instalar dependencias.
+echo [ERRO] Se voce cancelou manualmente, rode novamente o script e aguarde concluir.
+echo [ERRO] Falha em pip install (possivel cancelamento do usuario).>> "!LOGFILE!"
+echo [ERRO] Veja o log: !LOGFILE!
+pause
+exit /b 1
 
 :fail
 echo.
